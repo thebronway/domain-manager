@@ -1,0 +1,18 @@
+# --- Python Cache ---
+__pycache__/
+app/__pycache__/
+*.pyc
+
+# --- Local Config & Secrets ---
+# NEVER commit your secrets or runtime config
+.env
+config/
+app_state.json
+
+# --- Sensitive Volumes ---
+# NEVER commit certificates or logs
+certs/
+logs/
+
+# --- OS-specific files ---
+.DS_Store

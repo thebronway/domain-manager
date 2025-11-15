@@ -1,0 +1,24 @@
+# --- Core ---
+flask
+gunicorn
+requests
+pyyaml
+schedule
+
+# --- AWS / Route 53 ---
+boto3
+
+# --- Authentication ---
+werkzeug
+
+# --- SSL Certificate Reading ---
+cryptography
+
+# --- Timezone Support ---
+pytz
+
+# --- Log Retention ---
+python-dateutil
+
+# --- Notifications ---
+apprise

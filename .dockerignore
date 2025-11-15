@@ -1,0 +1,21 @@
+# --- Git & OS ---
+.git/
+.gitignore
+.DS_Store
+
+# --- Python Cache ---
+__pycache__/
+app/__pycache__/
+*.pyc
+
+# --- Config & Secrets ---
+# Do NOT copy secrets or config examples into the image
+.env
+config_example/
+app_state.json
+
+# --- Volumes ---
+# These are mounted at runtime, NEVER copy them in
+config/
+certs/
+logs/

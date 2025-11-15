@@ -1,0 +1,36 @@
+{% extends "_layout.html" %}
+
+{% block title %}Logs for {{ domain_name }} - Domain Manager{% endblock %}
+
+{% block head %}
+<style>
+    .log-container {
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 15px;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 14px;
+        white-space: pre-wrap; /* Wrap long lines */
+        word-break: break-all;
+        height: 60vh;
+        overflow-y: auto;
+        color: var(--text-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <h2>Logs for [{{ domain_name }}]</h2>
+    <p>Showing the last 1000 matching entries from <code>/logs/domain-manager.log</code> (newest first).</p>
+    <div class="log-container" id="log-box">
+{{ log_content }}
+    </div>
+
+    <script>
+        // On page load, scroll the log box to the top
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.getElementById('log-box').scrollTop = 0;
+        });
+    </script>
+{% endblock %}

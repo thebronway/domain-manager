@@ -1,0 +1,388 @@
+/* --- 1. CSS Variables (Default: Light Mode) --- */
+:root {
+    --bg-color: #f4f7f6;
+    --page-bg-color: #ffffff;
+    --text-color: #333333;
+    --text-color-light: #555555;
+    --border-color: #eeeeee;
+    --header-color: #111111;
+    --table-header-bg: #f8f9fa;
+    --table-row-hover: #f1f1f1;
+    --table-expand-bg: #fafafa;
+    --link-color: #007bff;
+    --link-hover-color: #0056b3;
+    --button-bg: #007bff;
+    --button-text: #ffffff;
+    --button-hover-bg: #0056b3;
+    --button-secondary-bg: #6c757d;
+    --button-secondary-text: #ffffff;
+    --button-secondary-hover-bg: #5a6268;
+
+    /* Status Indicators */
+    --status-matched-bg: #28a745;
+    --status-matched-text: #ffffff;
+    --status-mismatch-bg: #ffc107;
+    --status-mismatch-text: #333333;
+    --status-error-bg: #dc3545;
+    --status-error-text: #ffffff;
+    --status-unknown-bg: #6c757d;
+    --status-unknown-text: #ffffff;
+}
+
+/* --- 2. Dark Mode Overrides --- */
+body.dark-mode {
+    --bg-color: #121212;
+    --page-bg-color: #1e1e1e;
+    --text-color: #e0e0e0;
+    --text-color-light: #aaaaaa;
+    --border-color: #333333;
+    --header-color: #ffffff;
+    --table-header-bg: #2c2c2c;
+    --table-row-hover: #2a2a2a;
+    --table-expand-bg: #222222;
+    --link-color: #3391ff;
+    --link-hover-color: #66afff;
+    --button-bg: #3391ff;
+    --button-text: #ffffff;
+    --button-hover-bg: #66afff;
+    --button-secondary-bg: #5a6268;
+    --button-secondary-text: #ffffff;
+    --button-secondary-hover-bg: #4a5157;
+}
+
+/* --- 3. Base Styles (using variables) --- */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    line-height: 1.6;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: var(--page-bg-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid var(--border-color);
+}
+
+/* --- 4. NEW Top Bar --- */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--table-expand-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin-bottom: 20px;
+}
+
+.top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.top-bar-left h1 {
+    margin: 0;
+    font-size: 1.25em;
+    color: var(--header-color);
+}
+
+.top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.scheduler-status {
+    font-size: 0.85em;
+    color: var(--text-color-light);
+    text-align: right;
+    white-space: nowrap; /* Prevent stacking on small screens */
+}
+
+/* --- 5. NEW Actions Dropdown --- */
+.actions-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.actions-dropdown-button {
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    padding: 8px 15px;
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.actions-dropdown-button:hover {
+    background-color: var(--button-hover-bg);
+}
+
+.actions-dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: var(--page-bg-color);
+    border: 1px solid var(--border-color);
+    min-width: 220px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    border-radius: 4px;
+}
+
+.actions-dropdown-content form {
+    display: block;
+    margin: 0;
+}
+
+.actions-dropdown-content button {
+    color: var(--text-color);
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.actions-dropdown-content button:hover {
+    background-color: var(--table-row-hover);
+}
+
+/* Show the dropdown content on hover/focus */
+.actions-dropdown:hover .actions-dropdown-content,
+.actions-dropdown:focus-within .actions-dropdown-content {
+    display: block;
+}
+
+
+/* --- 6. Flash Messages --- */
+.flash { padding: 15px; margin-bottom: 20px; border-radius: 4px; border: 1px solid transparent; }
+.flash.success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+.flash.danger { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+.flash.info { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+.flash.warning { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
+
+/* Dark mode flashes */
+body.dark-mode .flash.success { background-color: #1a4a2a; color: #d4edda; border-color: #2a683d; }
+body.dark-mode .flash.danger { background-color: #5a2c32; color: #f8d7da; border-color: #8a3c46; }
+body.dark-mode .flash.info { background-color: #1c4a55; color: #d1ecf1; border-color: #2c7a8a; }
+body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; border-color: #997404; }
+
+/* --- 7. Theme Toggle Button --- */
+.theme-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color-light);
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.theme-button:hover {
+    background-color: var(--table-row-hover);
+}
+.theme-button svg {
+    stroke: var(--text-color);
+}
+
+/* --- 8. Dashboard Table Styles --- */
+.domain-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+.domain-table th, .domain-table td {
+    border: 1px solid var(--border-color);
+    padding: 12px 15px;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* First column (Domain Name) can wrap */
+.domain-table th:first-child,
+.domain-table td:first-child {
+    white-space: normal;
+}
+
+/* Set minimum widths for status columns */
+.domain-table th:nth-child(2),
+.domain-table td:nth-child(2),
+.domain-table th:nth-child(3),
+.domain-table td:nth-child(3) {
+    min-width: 120px; 
+}
+
+/* Logs column */
+.domain-table th:nth-child(4),
+.domain-table td:nth-child(4) {
+    min-width: 60px;
+    text-align: center;
+}
+
+
+.domain-table th {
+    background-color: var(--table-header-bg);
+    font-weight: 600;
+}
+.domain-table tr.domain-row {
+    cursor: pointer;
+}
+.domain-table tr.domain-row:hover {
+    background-color: var(--table-row-hover);
+}
+
+/* --- NEW: Expandable row icon --- */
+.domain-row td:first-child::before {
+    content: '►'; /* Collapsed icon */
+    font-size: 0.7em;
+    margin-right: 8px;
+    display: inline-block;
+    transition: transform 0.2s ease-in-out;
+}
+.domain-row.is-open td:first-child::before {
+    transform: rotate(90deg); /* Expanded icon */
+}
+
+
+/* Status Indicators */
+.status-indicator {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.status-matched { background-color: var(--status-matched-bg); color: var(--status-matched-text); }
+.status-mismatch { background-color: var(--status-mismatch-bg); color: var(--status-mismatch-text); }
+.status-error { background-color: var(--status-error-bg); color: var(--status-error-text); }
+.status-unknown { background-color: var(--status-unknown-bg); color: var(--status-unknown-text); }
+
+/* Expandable Row */
+.expandable-content {
+    display: none; /* Hidden by default */
+    background-color: var(--table-expand-bg);
+}
+.expandable-content td {
+    border: 0;
+    border-bottom: 1px solid var(--border-color);
+    border-top: 1px solid var(--border-color);
+    padding: 15px;
+    white-space: normal; 
+}
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+}
+.details-grid strong {
+    color: var(--text-color-light);
+}
+
+/* --- NEW: Refresh Icon Style --- */
+.refresh-icon {
+    display: inline-block;
+    margin-left: 8px;
+    text-decoration: none;
+    color: var(--link-color);
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
+}
+.refresh-icon:hover {
+    color: var(--link-hover-color);
+    transform: rotate(90deg);
+    transition: transform 0.2s;
+}
+
+.action-buttons {
+    margin-top: 15px;
+}
+
+/* Buttons */
+.btn {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    font-weight: bold;
+    margin-right: 10px;
+}
+.btn-primary {
+    background-color: var(--button-bg);
+    color: var(--button-text);
+}
+.btn-primary:hover {
+    background-color: var(--button-hover-bg);
+}
+.btn-secondary {
+    background-color: var(--button-secondary-bg);
+    color: var(--button-secondary-text);
+}
+.btn-secondary:hover {
+    background-color: var(--button-secondary-hover-bg);
+}
+
+/* Small Button (for "View" logs) */
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+/* --- 9. Loading Overlay --- */
+#loading-overlay {
+    display: none; /* Hidden by default */
+    position: fixed; /* Cover the whole screen */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7); /* Dark semi-transparent background */
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: white;
+}
+#loading-overlay p {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+/* --- 10. Footer --- */
+.app-footer {
+    text-align: center;
+    padding: 20px 0;
+    margin-top: 20px;
+    font-size: 0.85em;
+    color: var(--text-color-light);
+}
+
+.app-footer a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.app-footer a:hover {
+    color: var(--link-hover-color);
+    text-decoration: underline;
+}

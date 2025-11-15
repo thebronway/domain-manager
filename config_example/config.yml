@@ -1,0 +1,134 @@
+# -------------------------------------------------------------------
+# Domain Manager - Example Configuration
+# -------------------------------------------------------------------
+# This is a full example file. Copy this to /config/config.yml
+# and edit it to match your environment.
+# -------------------------------------------------------------------
+
+# --- Global Settings ---
+
+# Set the timezone for all displayed timestamps.
+# Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+# (e.g., "America/New_York", "Europe/London", "UTC")
+timezone: "America/New_York"
+
+# How often to check for a public IP change.
+# "5m"  = every 5 min (at :00, :05, :10...)
+# "10m" = every 10 min (at :00, :10, :20...)
+# "60m" = every hour (at :00)
+# "24h" = daily (at 00:00)
+# "disabled" = never
+ip_check_interval: "5m"
+
+# How long to keep Certbot log files in the /certs volume.
+# Default: "3 months" (Units: "days", "weeks", "months", "years")
+log_retention: "3 months"
+
+# -------------------------------------------------------------------
+# Notification Settings
+# -------------------------------------------------------------------
+notifications:
+  # This is the MASTER kill switch. If false, no notifications are sent.
+  enabled: true 
+  
+  # --- Service-Specific Settings ---
+  # Enable all the services you want to use.
+  # The app loads sensitive URLs/secrets from environment variables.
+  
+  smtp:
+    enabled: true
+    host: "email-smtp.us-east-1.amazonaws.com"
+    port: 587
+    from_email: "domain-manager@your-domain.com"
+    to_email: "you@your-domain.com"
+    # Secrets: SMTP_USER, SMTP_PASS
+  
+  discord:
+    enabled: false
+    # Secret: DISCORD_WEBHOOK_URL
+    
+  slack:
+    enabled: false
+    # Secret: SLACK_WEBHOOK_URL
+    
+  telegram:
+    enabled: false
+    # Secret: TELEGRAM_URL
+    
+  msteams:
+    enabled: false
+    # Secret: MSTEAMS_WEBHOOK_URL
+    
+  pushover:
+    enabled: false
+    # Secret: PUSHOVER_URL
+    
+  gchat:
+    enabled: false
+    # Secret: GCHAT_WEBHOOK_URL
+
+# -------------------------------------------------------------------
+# Domain Definitions
+# -------------------------------------------------------------------
+domains:
+  # --- Example 1: Full-Featured (Wildcard) ---
+  # Does everything: DDNS, Wildcard SSL, Auto-Updates, and Notifications.
+  - name: "my-home-server.com"
+    ddns: true
+    ssl:
+      enabled: true
+      wildcard: true 
+    notifications: true
+    auto_update: true
+
+  # --- Example 2: "Monitor-Only" Mode ---
+  # Will check for IP mismatches and SSL renewal failures,
+  # but will NOT automatically update them. It will, however,
+  # NOTIFY you if it finds a problem.
+  - name: "critical-app.com"
+    ddns: true 
+    ssl:
+      enabled: true
+      wildcard: true 
+    notifications: true
+    auto_update: false
+
+  # --- Example 3: DDNS Only ---
+  # Just keeps the 'A' record updated. No SSL management.
+  - name: "dyndns.my-other-domain.com"
+    ddns: true
+    ssl:
+      enabled: false
+    notifications: true
+    auto_update: true
+
+  # --- Example 4: SSL Only (Non-Wildcard) ---
+  # Manages a non-wildcard SSL cert.
+  # DDNS is off, useful if this is a CNAME record or has a static IP.
+  - name: "www.my-blog.com"
+    ddns: false
+    ssl:
+      enabled: true
+      wildcard: false # Explicitly false (this is the default)
+    notifications: true
+    auto_update: true
+
+  # --- Example 5: "Silent" Mode ---
+  # Updates everything but never sends notifications.
+  - name: "unimportant-test-site.com"
+    ddns: true
+    ssl:
+      enabled: true
+      wildcard: false
+    notifications: false
+    auto_update: true
+
+  # --- Example 6: "Read-Only" ---
+  # Just shows up in the dashboard.
+  # No DDNS, no SSL, no updates, no notifications.
+  - name: "static-record.com"
+    ddns: false
+    ssl:
+      enabled: false
+    notifications: false
+    auto_update: false

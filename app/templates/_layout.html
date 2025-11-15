@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Domain Manager{% endblock %}</title>
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <script>
+        (function() {
+            try {
+                const theme = localStorage.getItem('theme');
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark-mode');
+                    document.body.classList.add('dark-mode');
+                }
+            } catch(e) {
+                console.error("Could not load theme from localStorage", e);
+            }
+        })();
+    </script>
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+    
+    <footer class="app-footer">
+        v0.1 | 
+        <a href="https://github.com/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">GitHub</a> | 
+        <a href="https://hub.docker.com/r/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">Docker Hub</a>
+    </footer>
+    
+</body>
+</html>
