@@ -3,12 +3,14 @@
 # Start the cron daemon in the background (as root)
 cron
 
-# --- THIS IS THE FIX ---
 # Create the log file AND set permissions on the entire directory.
 # This ensures the 'www-data' user can write AND rotate logs.
 touch /logs/domain-manager.log
 chown -R www-data:www-data /logs
-# --- END FIX ---
+
+# Create the state file AND set permissions on the config directory.
+touch /config/app_state.json
+chown -R www-data:www-data /config
 
 # Set gunicorn web server options
 # We use a single worker to prevent duplicate schedulers

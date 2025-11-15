@@ -272,6 +272,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
 .status-mismatch { background-color: var(--status-mismatch-bg); color: var(--status-mismatch-text); }
 .status-error { background-color: var(--status-error-bg); color: var(--status-error-text); }
 .status-unknown { background-color: var(--status-unknown-bg); color: var(--status-unknown-text); }
+.status-na { background-color: var(--status-unknown-bg); color: var(--status-unknown-text); }
 
 /* Expandable Row */
 .expandable-content {
