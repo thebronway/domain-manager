@@ -18,6 +18,17 @@ from app.app import config
 
 logger = logging.getLogger(__name__)
 
+# --- Helper function for getting timezone ---
+# (Moved to the top to be available to all classes)
+def get_user_timezone():
+    """Gets the pytz timezone object from config."""
+    try:
+        tz_name = config.get('timezone', 'UTC')
+        return pytz.timezone(tz_name)
+    except pytz.UnknownTimeZoneError:
+        logger.warning(f"Unknown timezone '{tz_name}'. Defaulting to UTC.")
+        return pytz.timezone('UTC')
+
 # --- Notification Service (UPDATED WITH APPRISE) ---
 
 class NotificationService:
@@ -85,6 +96,7 @@ class NotificationService:
         add_url_notifier('pushover')
         add_url_notifier('gchat')
         
+        # Check if any servers were successfully configured
         if not self.apobj.servers:
             logger.warning("Notifications are enabled, but no valid notifiers were successfully configured.")
             self.enabled = False
@@ -95,12 +107,21 @@ class NotificationService:
             return True, "Notifications are disabled."
 
         try:
-            # Notify all services at once
-            self.apobj.notify(body=body, title=subject)
-            logger.info("Notification sent successfully to all services.")
-            return True, "Notification sent."
+            # The .notify() method returns True if at least one service
+            # succeeded, and False if all services failed.
+            success = self.apobj.notify(body=body, title=subject)
+
+            if success:
+                logger.info("Notification sent successfully to at least one service.")
+                return True, "Notification sent."
+            else:
+                # Catch cases where a warning was logged (like SMTP failure) but the app reported success
+                logger.error("All notification services failed. Check logs and env vars.")
+                return False, "All notification services failed."
+                
         except Exception as e:
-            logger.error(f"Failed to send notification: {e}")
+            # This catches a more serious error, like apprise itself crashing
+            logger.error(f"A critical error occurred during notification: {e}")
             return False, str(e)
 
     def send_notification(self, subject, body):
@@ -120,6 +141,7 @@ class PublicIPService:
     """Fetches the container's public IP address."""
     
     def __init__(self):
+        aws_config = config.get('aws', {})
         self.ip_providers = [
             "https://api.ipify.org",
             "https://icanhazip.com",
@@ -313,24 +335,13 @@ class CertificateMonitor:
         Returns a timezone-aware datetime object.
         """
         
-        # Note: Certbot creates certs based on the *first* -d flag.
-        # If config is `wildcard: true` for `test.area51b.com`,
-        # the first -d is `test.area51b.com`, so the cert folder is
-        # named `test.area51b.com`, not `*.test.area51b.com`.
-        # This logic correctly uses the main domain name.
-        
         cert_path = f"/certs/{domain_key}/live/{domain_key}/fullchain.pem"
         
         if not os.path.exists(cert_path):
             logger.info(f"Certificate file not found at {cert_path}")
             return None
             
-        try:
-            # Use a helper function to get the TZ, or default to UTC
-            tz = pytz.timezone(config.get('timezone', 'UTC'))
-        except pytz.UnknownTimeZoneError:
-            logger.warning(f"Unknown timezone in config. Defaulting to UTC.")
-            tz = pytz.timezone('UTC')
+        tz = get_user_timezone()
 
         try:
             with open(cert_path, 'rb') as f:
@@ -347,14 +358,3 @@ class CertificateMonitor:
         except Exception as e:
             logger.error(f"Error reading certificate file {cert_path}: {e}")
             return None
-
-# --- Helper function for getting timezone ---
-# (This is used by CertificateMonitor)
-def get_user_timezone():
-    """Gets the pytz timezone object from config."""
-    try:
-        tz_name = config.get('timezone', 'UTC')
-        return pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        logger.warning(f"Unknown timezone '{tz_name}'. Defaulting to UTC.")
-        return pytz.timezone('UTC')
