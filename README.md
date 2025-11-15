@@ -22,6 +22,8 @@ This application provides a simple web dashboard to monitor and manage your doma
 * **Thread-Safe State:** Uses threading locks to prevent `app_state.json` corruption.
 
 ---
+![Dashboard Screenshot](screenshot.png)
+---
 
 ## Requirements
 
