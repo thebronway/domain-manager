@@ -381,24 +381,44 @@ class CertificateMonitor:
     """Reads certificate files from disk to check expiration."""
 
     def get_cert_expiration_date(self, domain_key):
-        """
-        Finds the 'fullchain.pem' for a domain and reads its expiry.
-        Returns a timezone-aware datetime object.
-        """
         
-        cert_path = f"/certs/{domain_key}/live/{domain_key}/fullchain.pem"
+        live_dir = f"/certs/{domain_key}/live/"
         
-        if not os.path.exists(cert_path):
-            logger.info(f"Certificate file not found at {cert_path}")
+        if not os.path.isdir(live_dir):
+            logger.info(f"Certificate 'live' directory not found at {live_dir}")
             return None
-            
-        tz = get_user_timezone()
+        
+        cert_path = None
+        try:
+            # Find the first directory inside /live/
+            subdirs = [d for d in os.listdir(live_dir) if os.path.isdir(os.path.join(live_dir, d))]
+            if not subdirs:
+                logger.warning(f"No certificate subdirectories found in {live_dir}")
+                return None
 
+            # Find the first valid fullchain.pem
+            for subdir in subdirs:
+                potential_path = os.path.join(live_dir, subdir, "fullchain.pem")
+                if os.path.exists(potential_path):
+                    cert_path = potential_path
+                    logger.info(f"Found certificate at {cert_path}")
+                    break
+            
+            if not cert_path:
+                logger.error(f"Found /live/ directory, but no fullchain.pem in any subdirectory.")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error scanning for certificate in {live_dir}: {e}")
+            return None
+
+        # --- Now, read the file we found ---
+        tz = get_user_timezone()
         try:
             with open(cert_path, 'rb') as f:
                 cert_data = f.read()
             
-            cert = cryptography.x509.load_pem_x0c_certificate(cert_data, default_backend())
+            cert = cryptography.x509.load_pem_x509_certificate(cert_data, default_backend())
             
             # Use not_valid_after_utc for a timezone-aware datetime
             utc_expiration = cert.not_valid_after_utc
