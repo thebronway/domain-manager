@@ -23,7 +23,6 @@
             
             <!-- Actions Dropdown -->
             <div class="actions-dropdown" tabindex="0">
-                <!-- NEW: Disable button in demo mode -->
                 <button class="actions-dropdown-button" {{ 'disabled' if demo_mode }}>Actions ▼</button>
                 <div class="actions-dropdown-content">
                     <form action="{{ url_for('trigger_ddns') }}" method="POST">
@@ -33,10 +32,8 @@
                         <button type="submit">Check & Renew All Certs</button>
                     </form>
                     <form action="{{ url_for('trigger_test_notification') }}" method="POST">
-                        <!-- This button is NOT disabled, as it works in demo mode -->
                         <button type="submit">Send Test Notification</button>
                     </form>
-                    <!-- This button is handled by JS, which is now demo-mode aware -->
                     <button type="button" id="reset-sort-btn" onclick="location.reload()">Reset Table Sort</button>
                 </div>
             </div>
@@ -68,10 +65,13 @@
                     {% set auto_update_enabled = domain_config.get('auto_update', true) %}
                     
                     <tr class="domain-row" data-target="#details-{{ loop.index }}" data-default-order="{{ loop.index }}">
-                        <td><strong>{{ domain_name }}</strong></td>
+                        <td data-label="Domain">
+                            <strong>{{ domain_name }}</strong>
+                            <span class="mobile-expand-icon">►</span>
+                        </td>
                         
                         <!-- DDNS Status Column -->
-                        <td>
+                        <td data-label="DDNS Status">
                             {% if ddns_enabled %}
                                 {% set public_ip = app_state.public_ip %}
                                 {% set recorded_ip = state.get('recorded_ip') %}
@@ -95,7 +95,7 @@
                         </td>
                         
                         <!-- SSL Expiration Column -->
-                        <td>
+                        <td data-label="SSL Expiration">
                             {% if ssl_enabled and state.get('ssl_expiration') %}
                                 {{ state.ssl_expiration.strftime('%Y-%m-%d') }}
                             {% elif ssl_enabled %}
@@ -106,19 +106,18 @@
                         </td>
                         
                         <!-- Log Button Column -->
-                        <td>
-                            <a href="{{ url_for('view_log', domain_name=domain_name) }}" target="_blank" class="btn btn-secondary btn-sm">View</a>
+                        <td data-label="Logs">
+                            <a href="{{ url_for('view_log', domain_name=domain_name) }}" target="_blank" class="btn btn-secondary btn-sm">View Logs</a>
                         </td>
                     </tr>
                     
-                    <!-- Expandable Row -->
+                    <!-- Expandable Row (No data-labels needed here) -->
                     <tr class="expandable-content" id="details-{{ loop.index }}">
                         <td colspan="4">
                             <div class="details-grid">
                                 <div><strong>Current Public IP:</strong> {{ app_state.public_ip or 'N/A' }}</div>
                                 <div><strong>Recorded IP (Route 53):</strong> 
                                     {{ state.get('recorded_ip') or 'N/A' }}
-                                    <!-- NEW: Disable refresh icon in demo mode -->
                                     <a href="{{ url_for('trigger_refresh_ip', domain_name=domain_name) }}" 
                                        class="refresh-icon" 
                                        title="Refresh Recorded IP"
@@ -146,7 +145,6 @@
                                 
                                 {% if ddns_enabled %}
                                 <form action="{{ url_for('trigger_force_update_ip', domain_name=domain_name) }}" method="POST" style="display: inline;">
-                                    <!-- NEW: Disable button in demo mode -->
                                     <button type="submit" class="btn btn-secondary" {{ 'disabled' if demo_mode }}>Update IP Manually</button>
                                 </form>
                                 {% endif %}
@@ -154,15 +152,13 @@
                                 {% if ssl_enabled %}
                                     {% if state.get('ssl_expiration') %}
                                         <form action="{{ url_for('trigger_ssl') }}" method="POST" style="display: inline;">
-                                            <!-- NEW: Disable button in demo mode -->
                                             <button type="submit" class="btn btn-secondary" {{ 'disabled' if demo_mode }}>Renew Cert Manually</button>
                                         </form>
                                     {% else %}
                                         <form action="{{ url_for('trigger_create_cert', domain_name=domain_name) }}" 
                                               method="POST" 
                                               style="display: inline;"
-                                              onsubmit="showLoadingOverlay({{ demo_mode }})"> <!-- NEW: Pass demo_mode to function -->
-                                            <!-- NEW: Disable button in demo mode -->
+                                              onsubmit="showLoadingOverlay({{ demo_mode | tojson }})"> 
                                             <button type="submit" class="btn btn-primary" {{ 'disabled' if demo_mode }}>Create Cert Manually</button>
                                         </form>
                                     {% endif %}
@@ -181,10 +177,9 @@
         </tbody>
     </table>
 
-    <!-- All JS is now in app.js, so we only need this one function -->
     <script>
         function showLoadingOverlay(isDemo) {
-            // NEW: Do not show the overlay in demo mode
+            // Do not show the overlay in demo mode
             if (isDemo) {
                 return;
             }

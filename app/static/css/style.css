@@ -126,6 +126,11 @@ body {
 .actions-dropdown-button:hover {
     background-color: var(--button-hover-bg);
 }
+.actions-dropdown-button:disabled {
+    background-color: var(--button-secondary-bg);
+    opacity: 0.6;
+    cursor: not-allowed;
+}
 
 .actions-dropdown-content {
     display: none;
@@ -161,8 +166,6 @@ body {
     background-color: var(--table-row-hover);
 }
 
-/* Show the dropdown content on hover/focus */
-.actions-dropdown:hover .actions-dropdown-content,
 .actions-dropdown:focus-within .actions-dropdown-content {
     display: block;
 }
@@ -176,10 +179,10 @@ body {
 .flash.warning { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
 
 /* Dark mode flashes */
-body.dark-mode .flash.success { background-color: #1a4a2a; color: #d4edda; border-color: #2a683d; }
-body.dark-mode .flash.danger { background-color: #5a2c32; color: #f8d7da; border-color: #8a3c46; }
-body.dark-mode .flash.info { background-color: #1c4a55; color: #d1ecf1; border-color: #2c7a8a; }
-body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; border-color: #997404; }
+:root.dark-mode .flash.success { background-color: #1a4a2a; color: #d4edda; border-color: #2a683d; }
+:root.dark-mode .flash.danger { background-color: #5a2c32; color: #f8d7da; border-color: #8a3c46; }
+:root.dark-mode .flash.info { background-color: #1c4a55; color: #d1ecf1; border-color: #2c7a8a; }
+:root.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; border-color: #997404; }
 
 /* --- 7. Theme Toggle Button --- */
 .theme-button {
@@ -247,7 +250,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     background-color: var(--table-row-hover);
 }
 
-/* --- Expandable row icon --- */
+/* Expandable row icon */
 .domain-row td:first-child::before {
     content: '►'; /* Collapsed icon */
     font-size: 0.7em;
@@ -295,7 +298,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     color: var(--text-color-light);
 }
 
-/* --- Refresh Icon Style --- */
+/* Refresh Icon Style */
 .refresh-icon {
     display: inline-block;
     margin-left: 8px;
@@ -388,7 +391,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     text-decoration: underline;
 }
 
-/* --- 11. Sort Icon Box --- */
+/* --- 11. Sort Icon Box (We fixed this) --- */
 .sort-icon {
     display: inline-block;
     border: 1px solid var(--border-color);
@@ -422,11 +425,182 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     color: var(--link-color);
 }
 
-/* --- 12. Disabled Dropdown Button --- */
+/* --- 12. Disabled Dropdown Button (We fixed this) --- */
 .actions-dropdown-content button:disabled {
     color: var(--text-color-light);
     cursor: not-allowed;
 }
 .actions-dropdown-content button:disabled:hover {
     background-color: transparent;
+}
+.mobile-expand-icon {
+    display: none;
+}
+
+/* --- 13. Mobile Responice Styles --- */
+/* Using 768px as the breakpoint. Any screen this size or smaller will use these styles. */
+@media (max-width: 768px) {
+
+    /* --- Base --- */
+    .container {
+        margin: 0;
+        padding: 10px;
+        border-radius: 0;
+        box-shadow: none;
+        border-left: none;
+        border-right: none;
+    }
+
+    /* --- Top Bar --- */
+    .top-bar {
+        flex-direction: column; /* Stack items vertically */
+        align-items: stretch; /* Stretch items to full width */
+        gap: 15px;
+    }
+    
+    .top-bar-left {
+        justify-content: space-between; /* Puts title and reset button on opposite ends */
+        align-items: center;
+    }
+    .top-bar-left h1 {
+        font-size: 1.1em;
+    }
+    
+    .top-bar-right {
+        flex-direction: column-reverse; /* Put theme toggle on top */
+        align-items: stretch; /* Full-width buttons */
+        gap: 10px;
+    }
+    
+    .scheduler-status {
+        text-align: center; /* Center the status text */
+        white-space: normal;
+        background-color: var(--bg-color);
+        padding: 10px;
+        border-radius: 4px;
+    }
+    
+    .actions-dropdown-button {
+        width: 100%;
+    }
+    
+    .theme-button {
+        align-self: flex-end; /* Put theme button on the far right */
+    }
+
+    /* --- Domain Table (Card Layout) --- */
+    
+    .domain-table thead {
+        /* Hide the desktop header */
+        display: none;
+    }
+    
+    .domain-table tr.domain-row {
+        display: block; /* Stack <td> elements */
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .domain-table td {
+        display: flex; /* Change to flex for label/value layout */
+        justify-content: space-between; /* Label on left, value on right */
+        align-items: center;
+        padding: 10px 15px;
+        text-align: right; /* Align value to the right */
+        white-space: normal; /* Allow text to wrap */
+        border: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .domain-table td:last-child {
+        border-bottom: none; /* No border on the last item */
+    }
+    
+    .domain-table td::before {
+        /* This is the magic: Show the data-label as content */
+        content: attr(data-label);
+        font-weight: bold;
+        text-align: left;
+        padding-right: 15px;
+        color: var(--text-color-light);
+    }
+    
+    /* Make the first row (Domain Name) look like a header */
+    .domain-table td:first-child {
+        background-color: var(--table-header-bg);
+        border-radius: 4px 4px 0 0;
+    }
+    
+    .domain-table td:first-child strong {
+        font-size: 1.1em;
+    }
+    
+    /* Hide the "Domain" label since it's obvious */
+    .domain-table td:first-child::before {
+        display: none;
+    }
+
+    /* Show and style the new mobile icon */
+    .mobile-expand-icon {
+        display: inline-block; /* Show it */
+        font-size: 0.7em;
+        color: var(--text-color-light);
+        padding-left: 10px; /* Add some space */
+        transition: transform 0.2s ease-in-out;
+    }
+
+    /* Rotate the icon when the row is open */
+    .domain-row.is-open .mobile-expand-icon {
+        transform: rotate(90deg);
+    }
+    
+    /* Hide the expand/collapse arrow in the first cell */
+    .domain-row td:first-child::before {
+        display: none; 
+    }
+    
+    /* Center the "View" button in its row */
+    .domain-table td[data-label="Logs"] {
+        justify-content: center;
+    }
+    .domain-table td[data-label="Logs"]::before {
+        display: none; /* Hide the "Logs" label */
+    }
+    
+    /* --- Expandable Details --- */
+    .expandable-content td {
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        gap: 15px; /* This adds space between the text grid and the buttons */
+    }
+    
+    .details-grid {
+        grid-template-columns: 1fr; /* Stack the grid into one column */
+        gap: 12px;
+    }
+    
+    .details-grid div {
+        /* On mobile, make the details grid a flex layout too */
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .action-buttons {
+        display: flex;
+        flex-direction: column; /* Stack buttons vertically */
+        gap: 10px;
+    }
+    .action-buttons form,
+    .action-buttons .btn {
+        width: 100%;
+        margin-right: 0;
+    }
+    .action-buttons .btn {
+        box-sizing: border-box; /* Ensure padding doesn't break width */
+    }
+
 }
