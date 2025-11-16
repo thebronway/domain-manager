@@ -332,6 +332,10 @@ class CertbotService:
             domain_arg += f" -d *.{domain_name}"
             
         config_dir = f"/certs/{domain_name}"
+
+        logger.info(f"Ensuring config directory exists at {config_dir}")
+        os.makedirs(config_dir, exist_ok=True)
+
         command = (
             f"certbot certonly "
             f"--config-dir {config_dir} "
@@ -360,6 +364,10 @@ class CertbotService:
             logger.info(f"[{domain_name}] Running 'certbot renew' check...")
         
         config_dir = f"/certs/{domain_name}"
+
+        logger.info(f"Ensuring config directory exists at {config_dir}")
+        os.makedirs(config_dir, exist_ok=True)
+        
         command = (
             f"certbot renew --config-dir {config_dir} "
             f"--work-dir {config_dir} --logs-dir {config_dir} "
