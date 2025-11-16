@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
 
 # --- State Management ---
 STATE_FILE = "/config/app_state.json"
-
-# --- FIX: Add a lock for thread-safe state operations ---
 state_lock = threading.Lock()
 
 # This is the default structure for the app state
@@ -33,12 +31,33 @@ app_state = {
     "domain_states": {}
 }
 
-# --- Service Initialization ---
-ip_service = PublicIPService()
-r53_service = Route53Service()
-cert_service = CertbotService()
+# --- NEW: DEMO MODE Service Initialization ---
+# This is the most critical change to prevent the app from
+# crashing on boot when AWS credentials are not present.
+
+IS_DEMO_MODE = config.get('demo_mode', False)
+
+if IS_DEMO_MODE:
+    # In Demo Mode, all external services are "None"
+    # This prevents any real AWS/IP/Certbot calls from being made.
+    logger.info("Demo Mode: Skipping initialization of external services.")
+    ip_service = None
+    r53_service = None
+    cert_service = None
+    cert_monitor = None
+else:
+    # In Real Mode, initialize all services as normal.
+    logger.info("Initializing external services for real mode.")
+    ip_service = PublicIPService()
+    r53_service = Route53Service()
+    cert_service = CertbotService()
+    cert_monitor = CertificateMonitor()
+
+# NotificationService is initialized in both modes
+# so the "Send Test Notification" button can work.
 notify_service = NotificationService()
-cert_monitor = CertificateMonitor()
+# --- END NEW ---
+
 
 # --- State Persistence ---
 
@@ -46,11 +65,15 @@ def load_state():
     """Loads the app_state from a JSON file on startup."""
     global app_state
     
-    # --- FIX: Acquire lock for safe reading ---
+    # --- NEW: Skip loading state in demo mode ---
+    if IS_DEMO_MODE:
+        logger.info("Demo Mode: Skipping state load.")
+        return
+    # --- END NEW ---
+    
     with state_lock:
         if not os.path.exists(STATE_FILE):
             logger.info(f"State file not found at {STATE_FILE}. Starting with fresh state.")
-            # File not found, just return and keep the default state
             return
 
         try:
@@ -69,26 +92,26 @@ def load_state():
                 if state.get("ssl_last_renew"):
                     state["ssl_last_renew"] = datetime.fromisoformat(state["ssl_last_renew"])
             
-            # Use .update() to merge, preserving the default keys
             app_state.update(loaded_state)
             logger.info("Successfully loaded previous state from disk.")
                 
         except Exception as e:
-            # --- FIX: Be non-destructive on failure ---
             logger.error(f"Error loading state file: {e}. Starting with fresh state.")
-            # Reset to a known good state, but don't clear()
             app_state.update({
                 "public_ip": None,
                 "last_ip_check_time": None,
                 "domain_states": {}
             })
-    # --- FIX: Lock is automatically released here ---
 
 def save_state():
     """Saves the current app_state to a JSON file."""
     global app_state
     
-    # --- FIX: Acquire lock for safe writing ---
+    # --- NEW: Skip saving state in demo mode ---
+    if IS_DEMO_MODE:
+        return
+    # --- END NEW ---
+    
     with state_lock:
         try:
             state_to_save = copy.deepcopy(app_state)
@@ -109,7 +132,6 @@ def save_state():
             logger.info("Successfully saved app state to disk.")
         except Exception as e:
             logger.error(f"Error saving state file: {e}")
-    # --- FIX: Lock is automatically released here ---
 
 # --- Helper Function ---
 def get_user_timezone():
@@ -368,6 +390,12 @@ def run_initial_setup():
     with app.app_context():
         load_state()
         
+        # --- NEW: Skip in demo mode ---
+        if IS_DEMO_MODE:
+            logger.info("Demo Mode: Skipping initial setup.")
+            return
+        # --- END NEW ---
+        
         logger.info("Running initial setup... checking for missing SSL certs.")
         for domain_config in config.get_domains():
             if domain_config.get('ssl', {}).get('enabled'):
@@ -393,6 +421,12 @@ def run_initial_setup():
 
 def run_scheduler():
     """Runs the main scheduler loop in a separate thread."""
+    
+    # --- NEW: Skip in demo mode ---
+    if IS_DEMO_MODE:
+        logger.info("Demo Mode: Scheduler is disabled.")
+        return # Do not run any jobs
+    # --- END NEW ---
     
     # --- Schedule jobs FIRST to fix race condition ---
     
@@ -445,6 +479,13 @@ def run_scheduler():
 
 def start_scheduler():
     """Starts the scheduler in a non-blocking daemon thread."""
+    
+    # --- NEW: Skip in demo mode ---
+    if IS_DEMO_MODE:
+        logger.info("Demo Mode: Skipping scheduler thread start.")
+        return # Do not start the thread
+    # --- END NEW ---
+
     logger.info("Starting background scheduler thread...")
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()

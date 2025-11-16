@@ -15,6 +15,17 @@ class Config:
         self.file_config = self._load_file_config()
         self.env_config = self._load_env_config()
         self.settings = self._merge_configs()
+        
+        # --- NEW: DEMO MODE CHECK ---
+        # Read the DEMO_MODE environment variable
+        self.settings['demo_mode'] = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
+        
+        if self.settings['demo_mode']:
+            logger.warning("="*50)
+            logger.warning("DEMO MODE IS ENABLED")
+            logger.warning("AWS connections will be skipped and data will be randomized.")
+            logger.warning("="*50)
+        # --- END NEW ---
 
     def _load_file_config(self):
         """Loads the YAML config file."""

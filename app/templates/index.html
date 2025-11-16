@@ -10,11 +10,10 @@
         </div>
     </div>
 
-    <!-- NEW: Top Bar -->
+    <!-- Top Bar -->
     <div class="top-bar">
         <div class="top-bar-left">
             <h1>Domain Manager</h1>
-                <button id="reset-sort-btn" class="btn btn-secondary btn-sm" style="display: none;">Reset Sort</button>
         </div>
         <div class="top-bar-right">
             <div class="scheduler-status">
@@ -22,9 +21,10 @@
                 Next SSL Check: <strong>{{ next_ssl_run }}</strong>
             </div>
             
-            <!-- NEW: Actions Dropdown -->
-            <div class="actions-dropdown">
-                <button class="actions-dropdown-button">Actions ▼</button>
+            <!-- Actions Dropdown -->
+            <div class="actions-dropdown" tabindex="0">
+                <!-- NEW: Disable button in demo mode -->
+                <button class="actions-dropdown-button" {{ 'disabled' if demo_mode }}>Actions ▼</button>
                 <div class="actions-dropdown-content">
                     <form action="{{ url_for('trigger_ddns') }}" method="POST">
                         <button type="submit">Check & Update All IPs</button>
@@ -33,13 +33,15 @@
                         <button type="submit">Check & Renew All Certs</button>
                     </form>
                     <form action="{{ url_for('trigger_test_notification') }}" method="POST">
+                        <!-- This button is NOT disabled, as it works in demo mode -->
                         <button type="submit">Send Test Notification</button>
                     </form>
-                    <button type="button" onclick="location.reload()">Reset Table Sort</button>
+                    <!-- This button is handled by JS, which is now demo-mode aware -->
+                    <button type="button" id="reset-sort-btn" onclick="location.reload()">Reset Table Sort</button>
                 </div>
             </div>
             
-            <!-- MOVED: Theme toggle button -->
+            <!-- Theme toggle button -->
             <button id="theme-toggle" class="theme-button" title="Toggle dark/light mode"></button>
             
         </div>
@@ -62,7 +64,6 @@
                     {% set state = app_state.domain_states.get(domain_name, {}) %}
                     {% set ddns_enabled = domain_config.get('ddns', false) %}
                     {% set ssl_enabled = domain_config.get('ssl', {}).get('enabled', false) %}
-                    <!-- NEW: Get per-domain flags -->
                     {% set notifications_enabled = domain_config.get('notifications', true) %}
                     {% set auto_update_enabled = domain_config.get('auto_update', true) %}
                     
@@ -117,12 +118,15 @@
                                 <div><strong>Current Public IP:</strong> {{ app_state.public_ip or 'N/A' }}</div>
                                 <div><strong>Recorded IP (Route 53):</strong> 
                                     {{ state.get('recorded_ip') or 'N/A' }}
-                                    <!-- NEW: Refresh Icon -->
-                                    <a href="{{ url_for('trigger_refresh_ip', domain_name=domain_name) }}" class="refresh-icon" title="Refresh Recorded IP">⟳</a>
+                                    <!-- NEW: Disable refresh icon in demo mode -->
+                                    <a href="{{ url_for('trigger_refresh_ip', domain_name=domain_name) }}" 
+                                       class="refresh-icon" 
+                                       title="Refresh Recorded IP"
+                                       {{ 'onclick="return false;"' if demo_mode }} 
+                                       style="{{ 'opacity: 0.3; cursor: not-allowed;' if demo_mode }}">⟳</a>
                                 </div>
                                 <div><strong>DDNS Last Update:</strong> {{ state.get('last_update_time').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('last_update_time') else 'N/A' }}</div>
                                 <div><strong>SSL Last Renew:</strong> {{ state.get('ssl_last_renew').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('ssl_last_renew') else 'N/A' }}</div>
-                                <!-- NEW: Show notification status -->
                                 <div><strong>Notifications:</strong> 
                                     {% if notifications_enabled %}
                                         <span style="color: var(--status-matched-bg);">Enabled</span>
@@ -130,7 +134,6 @@
                                         <span style="color: var(--status-error-bg);">Disabled</span>
                                     {% endif %}
                                 </div>
-                                <!-- NEW: Show auto-update status -->
                                 <div><strong>Auto-Update:</strong> 
                                     {% if auto_update_enabled %}
                                         <span style="color: var(--status-matched-bg);">Enabled</span>
@@ -142,23 +145,25 @@
                             <div class="action-buttons">
                                 
                                 {% if ddns_enabled %}
-                                <!-- UPDATED: Point to new force_update route -->
                                 <form action="{{ url_for('trigger_force_update_ip', domain_name=domain_name) }}" method="POST" style="display: inline;">
-                                    <button type="submit" class="btn btn-secondary">Update IP Manually</button>
+                                    <!-- NEW: Disable button in demo mode -->
+                                    <button type="submit" class="btn btn-secondary" {{ 'disabled' if demo_mode }}>Update IP Manually</button>
                                 </form>
                                 {% endif %}
                                 
                                 {% if ssl_enabled %}
                                     {% if state.get('ssl_expiration') %}
                                         <form action="{{ url_for('trigger_ssl') }}" method="POST" style="display: inline;">
-                                            <button type="submit" class="btn btn-secondary">Renew Cert Manually</button>
+                                            <!-- NEW: Disable button in demo mode -->
+                                            <button type="submit" class="btn btn-secondary" {{ 'disabled' if demo_mode }}>Renew Cert Manually</button>
                                         </form>
                                     {% else %}
                                         <form action="{{ url_for('trigger_create_cert', domain_name=domain_name) }}" 
                                               method="POST" 
                                               style="display: inline;"
-                                              onsubmit="showLoadingOverlay()">
-                                            <button type="submit" class="btn btn-primary">Create Cert Manually</button>
+                                              onsubmit="showLoadingOverlay({{ demo_mode }})"> <!-- NEW: Pass demo_mode to function -->
+                                            <!-- NEW: Disable button in demo mode -->
+                                            <button type="submit" class="btn btn-primary" {{ 'disabled' if demo_mode }}>Create Cert Manually</button>
                                         </form>
                                     {% endif %}
                                 {% endif %}
@@ -176,36 +181,14 @@
         </tbody>
     </table>
 
-    <!-- UPDATED: Script now handles the rotating icon -->
+    <!-- All JS is now in app.js, so we only need this one function -->
     <script>
-        function showLoadingOverlay() {
+        function showLoadingOverlay(isDemo) {
+            // NEW: Do not show the overlay in demo mode
+            if (isDemo) {
+                return;
+            }
             document.getElementById('loading-overlay').style.display = 'flex';
         }
-    
-        document.addEventListener('DOMContentLoaded', (event) => {
-            document.querySelectorAll('.domain-row').forEach(row => {
-                row.addEventListener('click', (e) => {
-                    // Don't toggle row if clicking a link or button
-                    if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('.btn')) {
-                        return;
-                    }
-                    
-                    const targetId = row.getAttribute('data-target');
-                    const targetRow = document.querySelector(targetId);
-                    
-                    if (targetRow) {
-                        if (targetRow.style.display === 'table-row') {
-                            // Collapse
-                            targetRow.style.display = 'none';
-                            row.classList.remove('is-open');
-                        } else {
-                            // Expand
-                            targetRow.style.display = 'table-row';
-                            row.classList.add('is-open');
-                        }
-                    }
-                });
-            });
-        });
     </script>
 {% endblock %}

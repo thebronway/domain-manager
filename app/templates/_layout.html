@@ -10,8 +10,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
     <script>
+        // This IIFE is for loading the theme preference before the page paints
         (function() {
             try {
+                // We apply to the <html> tag (documentElement)
                 const theme = localStorage.getItem('theme');
                 if (theme === 'dark') {
                     document.documentElement.classList.add('dark-mode');
@@ -21,10 +23,37 @@
             }
         })();
     </script>
+
+    <!-- NEW: Demo Mode Banner CSS -->
+    <style>
+        .demo-banner {
+            background-color: #ffc107; /* Bright yellow */
+            color: #333;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+            border-bottom: 2px solid #e0a800;
+        }
+        body.dark-mode .demo-banner {
+            background-color: #e0a800;
+            color: #000;
+            border-bottom-color: #ffc107;
+        }
+    </style>
+    <!-- END NEW -->
     
     {% block head %}{% endblock %}
 </head>
 <body>
+
+    <!-- NEW: Demo Mode Banner -->
+    {% if demo_mode %}
+        <div class="demo-banner">
+            DEMO MODE ENABLED
+        </div>
+    {% endif %}
+    <!-- END NEW -->
+
     <div class="container">
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -40,10 +69,11 @@
         </div>
     </div>
     
+    <!-- We fixed this before, just one script tag now -->
     <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
     
     <footer class="app-footer">
-        v0.15 | 
+        v0.2 | <!-- Updated version -->
         <a href="https://github.com/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">GitHub</a> | 
         <a href="https://hub.docker.com/r/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">Docker Hub</a>
     </footer>
