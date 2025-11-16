@@ -12,6 +12,7 @@ import cryptography.x509
 from cryptography.hazmat.backends import default_backend
 import pytz
 import apprise
+import urllib.parse
 
 # Import the global config object
 from app.app import config
@@ -27,12 +28,12 @@ def get_user_timezone():
         return pytz.timezone(tz_name)
     except pytz.UnknownTimeZoneError:
         logger.warning(f"Unknown timezone '{tz_name}'. Defaulting to UTC.")
-        return pytz.timezone('UTC')
+        return pyt_timezone('UTC')
 
-# --- Notification Service (UPDATED WITH APPRISE) ---
+# --- Notification Service (FIXED) ---
 
 class NotificationService:
-    """Handles sending all notifications via Apprise."""
+    """Handles sending all notifications via Apprise AND a custom SMTP handler."""
     
     def __init__(self):
         self.config = config.get('notifications', {})
@@ -45,38 +46,26 @@ class NotificationService:
 
         logger.info("Initializing notification services...")
         
-        # --- Build our list of notifiers ---
-        
-        # 1. SMTP (Special case)
-        smtp_config = self.config.get('smtp', {})
-        if smtp_config.get('enabled'):
-            try:
-                host = smtp_config['host']
-                port = smtp_config['port']
-                user = smtp_config.get('user')
-                password = smtp_config.get('pass')
-                from_email = smtp_config['from_email']
-                to_email = smtp_config['to_email']
-                
-                if not all([host, port, from_email, to_email]):
-                    raise ValueError("SMTP config missing host, port, from_email, or to_email.")
-                
-                # Build the Apprise mailto:// URL
-                smtp_url = f"mailto://{from_email}?"
-                if user and password:
-                    smtp_url = f"mailto://{user}:{password}@{host}:{port}/?from={from_email}"
-                else:
-                     smtp_url = f"mailto://{host}:{port}/?from={from_email}"
-                
-                # Add all recipients
-                recipients = to_email.split(',')
-                for r in recipients:
-                    self.apobj.add(f"{smtp_url}&to={r.strip()}")
-                
-                logger.info(f"SMTP notifier added for {host}.")
-            except Exception as e:
-                logger.error(f"Failed to add SMTP notifier: {e}")
+        # --- 1. SMTP (Special case, using smtplib) ---
+        self.smtp_config = self.config.get('smtp', {})
+        self.smtp_enabled = self.smtp_config.get('enabled', False)
+        if self.smtp_enabled:
+            # Load settings, but don't connect yet
+            self.smtp_host = self.smtp_config.get('host')
+            self.smtp_port = self.smtp_config.get('port')
+            self.smtp_user = os.environ.get('SMTP_USER')
+            self.smtp_pass = os.environ.get('SMTP_PASS')
+            # Use .strip() to fix any whitespace issues in config
+            self.smtp_from = self.smtp_config.get('from_email', '').strip()
+            self.smtp_to = self.smtp_config.get('to_email', '').strip()
+            
+            if not all([self.smtp_host, self.smtp_port, self.smtp_user, self.smtp_pass, self.smtp_from, self.smtp_to]):
+                logger.error("SMTP is enabled, but config.yml or env vars are missing settings. Disabling.")
+                self.smtp_enabled = False
+            else:
+                logger.info(f"Custom SMTP handler is enabled for {self.smtp_host}.")
 
+        # --- 2. Apprise Notifiers (for everything else) ---
         # Helper function for URL-based notifiers
         def add_url_notifier(service_name):
             service_config = self.config.get(service_name, {})
@@ -88,7 +77,6 @@ class NotificationService:
                 else:
                     logger.warning(f"{service_name.capitalize()} is enabled but its URL is not set in env vars.")
 
-        # 2. Add all Apprise URL-based services
         add_url_notifier('discord')
         add_url_notifier('slack')
         add_url_notifier('telegram')
@@ -97,32 +85,88 @@ class NotificationService:
         add_url_notifier('gchat')
         
         # Check if any servers were successfully configured
-        if not self.apobj.servers:
+        if not self.apobj.servers and not self.smtp_enabled:
             logger.warning("Notifications are enabled, but no valid notifiers were successfully configured.")
             self.enabled = False
 
+    def _send_smtp(self, subject, body):
+        """
+        Sends an email using the proven smtplib logic from test_smtp.py.
+        """
+        if not self.smtp_enabled:
+            return True # Not enabled, so not a failure
+
+        logger.info(f"Sending email via custom SMTP to {self.smtp_to}...")
+        
+        try:
+            # 1. Connect and Log In
+            server = smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(self.smtp_user, self.smtp_pass)
+            
+            # 2. Build and Send Message
+            # We must split the "to" list in case of multiple recipients
+            recipients = [r.strip() for r in self.smtp_to.split(',')]
+            
+            # Use MIMEText for proper formatting
+            msg = MIMEText(body)
+            msg['Subject'] = subject
+            msg['From'] = self.smtp_from
+            msg['To'] = self.smtp_to # The display header
+
+            server.sendmail(self.smtp_from, recipients, msg.as_string())
+            logger.info("Custom SMTP send successful.")
+            server.quit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"--- CUSTOM SMTP FAILED ---")
+            logger.error(f"The REAL error is: {e}")
+            return False
+        finally:
+            try:
+                server.quit() # Ensure connection is closed
+            except:
+                pass
+
+    def _send_apprise(self, subject, body):
+        """
+        Sends notifications to all Apprise services (except SMTP).
+        """
+        if not self.apobj.servers:
+            return True # No Apprise servers configured, so not a failure
+
+        logger.info("Sending notifications via Apprise...")
+        try:
+            success = self.apobj.notify(body=body, title=subject)
+            if success:
+                logger.info("Apprise notification sent successfully.")
+            else:
+                logger.error("All Apprise notification services failed.")
+            return success
+            
+        except Exception as e:
+            logger.error(f"A critical error occurred during Apprise notification: {e}")
+            return False
+
     def _send(self, subject, body):
-        """Internal helper function to send a notification."""
+        """
+        Internal helper function to send all notifications.
+        """
         if not self.enabled:
             return True, "Notifications are disabled."
 
-        try:
-            # The .notify() method returns True if at least one service
-            # succeeded, and False if all services failed.
-            success = self.apobj.notify(body=body, title=subject)
+        # Run both handlers
+        smtp_success = self._send_smtp(subject, body)
+        apprise_success = self._send_apprise(subject, body)
 
-            if success:
-                logger.info("Notification sent successfully to at least one service.")
-                return True, "Notification sent."
-            else:
-                # Catch cases where a warning was logged (like SMTP failure) but the app reported success
-                logger.error("All notification services failed. Check logs and env vars.")
-                return False, "All notification services failed."
-                
-        except Exception as e:
-            # This catches a more serious error, like apprise itself crashing
-            logger.error(f"A critical error occurred during notification: {e}")
-            return False, str(e)
+        # Succeed if *at least one* method succeeded
+        if smtp_success or apprise_success:
+            return True, "Notification sent."
+        else:
+            return False, "All notification services failed."
 
     def send_notification(self, subject, body):
         """Sends a standard notification."""
@@ -132,7 +176,7 @@ class NotificationService:
         """Sends a test notification and returns a status."""
         logger.info("Sending test notification...")
         subject = "Test Notification"
-        body = "This is a test notification from Domain Manager.\n\nIf you received this, your notification settings are correct."
+        body = "This is a test notification from Domain Manager.\nThis should work now.\n\nIf you received this, your notification settings are correct."
         return self._send(subject, body)
 
 
@@ -347,7 +391,7 @@ class CertificateMonitor:
             with open(cert_path, 'rb') as f:
                 cert_data = f.read()
             
-            cert = cryptography.x509.load_pem_x509_certificate(cert_data, default_backend())
+            cert = cryptography.x509.load_pem_x0c_certificate(cert_data, default_backend())
             
             # Use not_valid_after_utc for a timezone-aware datetime
             utc_expiration = cert.not_valid_after_utc

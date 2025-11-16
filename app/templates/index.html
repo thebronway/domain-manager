@@ -14,6 +14,7 @@
     <div class="top-bar">
         <div class="top-bar-left">
             <h1>Domain Manager</h1>
+                <button id="reset-sort-btn" class="btn btn-secondary btn-sm" style="display: none;">Reset Sort</button>
         </div>
         <div class="top-bar-right">
             <div class="scheduler-status">
@@ -34,6 +35,7 @@
                     <form action="{{ url_for('trigger_test_notification') }}" method="POST">
                         <button type="submit">Send Test Notification</button>
                     </form>
+                    <button type="button" onclick="location.reload()">Reset Table Sort</button>
                 </div>
             </div>
             
@@ -46,9 +48,9 @@
     <table class="domain-table">
         <thead>
             <tr>
-                <th style="width: 80%;">Domain Name</th>
-                <th>DDNS Status</th>
-                <th>SSL Expiration</th>
+                <th style="width: 80%;">Domain Name <span class="sort-icon" data-sort-key="domain-name"></span></th>
+                <th>DDNS Status <span class="sort-icon" data-sort-key="ddns-status"></span></th>
+                <th>SSL Expiration <span class="sort-icon" data-sort-key="ssl-expire"></span></th>
                 <th>Logs</th>
             </tr>
         </thead>
@@ -64,7 +66,7 @@
                     {% set notifications_enabled = domain_config.get('notifications', true) %}
                     {% set auto_update_enabled = domain_config.get('auto_update', true) %}
                     
-                    <tr class="domain-row" data-target="#details-{{ loop.index }}">
+                    <tr class="domain-row" data-target="#details-{{ loop.index }}" data-default-order="{{ loop.index }}">
                         <td><strong>{{ domain_name }}</strong></td>
                         
                         <!-- DDNS Status Column -->

@@ -30,7 +30,7 @@
 }
 
 /* --- 2. Dark Mode Overrides --- */
-body.dark-mode {
+:root.dark-mode {
     --bg-color: #121212;
     --page-bg-color: #1e1e1e;
     --text-color: #e0e0e0;
@@ -386,4 +386,47 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
 .app-footer a:hover {
     color: var(--link-hover-color);
     text-decoration: underline;
+}
+
+/* --- 11. NEW Sort Icon Box --- */
+.sort-icon {
+    display: inline-block;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin-left: 8px;
+    cursor: pointer;
+    font-family: monospace;
+    font-weight: bold;
+    min-width: 1.5em; /* Ensure width is consistent */
+    text-align: center;
+    user-select: none; /* Prevent text selection */
+    vertical-align: middle;
+}
+.sort-icon:hover {
+    background-color: var(--table-row-hover);
+    border-color: var(--link-color);
+}
+/* Default, unsorted state (uses a better up-down arrow) */
+.sort-icon::after {
+    content: '↕'; 
+    color: var(--text-color-light);
+}
+/* Sorted states (set by JS) */
+.sort-icon.asc::after {
+    content: '↑';
+    color: var(--link-color);
+}
+.sort-icon.desc::after {
+    content: '↓';
+    color: var(--link-color);
+}
+
+/* --- 12. NEW Disabled Dropdown Button --- */
+.actions-dropdown-content button:disabled {
+    color: var(--text-color-light);
+    cursor: not-allowed;
+}
+.actions-dropdown-content button:disabled:hover {
+    background-color: transparent;
 }
