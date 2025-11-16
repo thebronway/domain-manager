@@ -31,9 +31,7 @@ app_state = {
     "domain_states": {}
 }
 
-# --- NEW: DEMO MODE Service Initialization ---
-# This is the most critical change to prevent the app from
-# crashing on boot when AWS credentials are not present.
+# --- DEMO MODE Service Initialization ---
 
 IS_DEMO_MODE = config.get('demo_mode', False)
 
@@ -56,8 +54,6 @@ else:
 # NotificationService is initialized in both modes
 # so the "Send Test Notification" button can work.
 notify_service = NotificationService()
-# --- END NEW ---
-
 
 # --- State Persistence ---
 
@@ -65,11 +61,10 @@ def load_state():
     """Loads the app_state from a JSON file on startup."""
     global app_state
     
-    # --- NEW: Skip loading state in demo mode ---
+    # --- Skip loading state in demo mode ---
     if IS_DEMO_MODE:
         logger.info("Demo Mode: Skipping state load.")
         return
-    # --- END NEW ---
     
     with state_lock:
         if not os.path.exists(STATE_FILE):
@@ -107,10 +102,9 @@ def save_state():
     """Saves the current app_state to a JSON file."""
     global app_state
     
-    # --- NEW: Skip saving state in demo mode ---
+    # --- Skip saving state in demo mode ---
     if IS_DEMO_MODE:
         return
-    # --- END NEW ---
     
     with state_lock:
         try:
@@ -390,11 +384,10 @@ def run_initial_setup():
     with app.app_context():
         load_state()
         
-        # --- NEW: Skip in demo mode ---
+        # --- Skip in demo mode ---
         if IS_DEMO_MODE:
             logger.info("Demo Mode: Skipping initial setup.")
             return
-        # --- END NEW ---
         
         logger.info("Running initial setup... checking for missing SSL certs.")
         for domain_config in config.get_domains():
@@ -422,11 +415,10 @@ def run_initial_setup():
 def run_scheduler():
     """Runs the main scheduler loop in a separate thread."""
     
-    # --- NEW: Skip in demo mode ---
+    # --- Skip in demo mode ---
     if IS_DEMO_MODE:
         logger.info("Demo Mode: Scheduler is disabled.")
         return # Do not run any jobs
-    # --- END NEW ---
     
     # --- Schedule jobs FIRST to fix race condition ---
     
@@ -480,11 +472,10 @@ def run_scheduler():
 def start_scheduler():
     """Starts the scheduler in a non-blocking daemon thread."""
     
-    # --- NEW: Skip in demo mode ---
+    # --- Skip in demo mode ---
     if IS_DEMO_MODE:
         logger.info("Demo Mode: Skipping scheduler thread start.")
         return # Do not start the thread
-    # --- END NEW ---
 
     logger.info("Starting background scheduler thread...")
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)

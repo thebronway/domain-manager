@@ -70,7 +70,7 @@ body {
     border: 1px solid var(--border-color);
 }
 
-/* --- 4. NEW Top Bar --- */
+/* --- 4. Top Bar --- */
 .top-bar {
     display: flex;
     justify-content: space-between;
@@ -107,7 +107,7 @@ body {
     white-space: nowrap; /* Prevent stacking on small screens */
 }
 
-/* --- 5. NEW Actions Dropdown --- */
+/* --- 5. Actions Dropdown --- */
 .actions-dropdown {
     position: relative;
     display: inline-block;
@@ -247,7 +247,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     background-color: var(--table-row-hover);
 }
 
-/* --- NEW: Expandable row icon --- */
+/* --- Expandable row icon --- */
 .domain-row td:first-child::before {
     content: '►'; /* Collapsed icon */
     font-size: 0.7em;
@@ -295,7 +295,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     color: var(--text-color-light);
 }
 
-/* --- NEW: Refresh Icon Style --- */
+/* --- Refresh Icon Style --- */
 .refresh-icon {
     display: inline-block;
     margin-left: 8px;
@@ -388,7 +388,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     text-decoration: underline;
 }
 
-/* --- 11. NEW Sort Icon Box --- */
+/* --- 11. Sort Icon Box --- */
 .sort-icon {
     display: inline-block;
     border: 1px solid var(--border-color);
@@ -422,7 +422,7 @@ body.dark-mode .flash.warning { background-color: #664d03; color: #fff3cd; borde
     color: var(--link-color);
 }
 
-/* --- 12. NEW Disabled Dropdown Button --- */
+/* --- 12. Disabled Dropdown Button --- */
 .actions-dropdown-content button:disabled {
     color: var(--text-color-light);
     cursor: not-allowed;

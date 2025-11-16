@@ -24,7 +24,7 @@
         })();
     </script>
 
-    <!-- NEW: Demo Mode Banner CSS -->
+    <!-- Demo Mode Banner CSS -->
     <style>
         .demo-banner {
             background-color: #ffc107; /* Bright yellow */
@@ -40,19 +40,16 @@
             border-bottom-color: #ffc107;
         }
     </style>
-    <!-- END NEW -->
     
     {% block head %}{% endblock %}
 </head>
 <body>
 
-    <!-- NEW: Demo Mode Banner -->
     {% if demo_mode %}
         <div class="demo-banner">
             DEMO MODE ENABLED
         </div>
     {% endif %}
-    <!-- END NEW -->
 
     <div class="container">
 
@@ -69,11 +66,10 @@
         </div>
     </div>
     
-    <!-- We fixed this before, just one script tag now -->
     <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
     
     <footer class="app-footer">
-        v0.2 | <!-- Updated version -->
+        v0.2 | 
         <a href="https://github.com/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">GitHub</a> | 
         <a href="https://hub.docker.com/r/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">Docker Hub</a>
     </footer>

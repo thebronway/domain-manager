@@ -10,11 +10,9 @@ from flask import render_template, jsonify, flash, redirect, url_for, Response
 from app.app import app, config
 from app.scheduler import (
     app_state, 
-    # --- NEW: Import services conditionally ---
     cert_service,
     cert_monitor,
     r53_service,
-    # --- END NEW ---
     run_ddns_update, 
     run_ssl_check, 
     save_state,
@@ -26,23 +24,20 @@ from app.scheduler import (
 logger = logging.getLogger(__name__)
 LOG_FILE = "/logs/domain-manager.log"
 
-# --- NEW: Get Demo Mode flag from config ---
 IS_DEMO_MODE = config.get('demo_mode', False)
-# --- END NEW ---
 
 # --- Helper ---
 def get_next_run_time(job_func_name):
     """
     Finds the EARLIEST next run time for a scheduled job by its function name.
     """
-    # --- NEW: Return fake data in demo mode ---
+    # --- Return fake data in demo mode ---
     if IS_DEMO_MODE:
         if job_func_name == "run_ddns_update":
             return "Every 5 Mins (Demo)"
         if job_func_name == "run_ssl_check":
             return "02:30 Daily (Demo)"
         return "Scheduled (Demo)"
-    # --- END NEW ---
 
     tz = get_user_timezone()
     next_runs = []
@@ -71,7 +66,7 @@ def get_next_run_time(job_func_name):
         logger.error(f"Error getting next run time for {job_func_name}: {e}")
         return "Error"
 
-# --- NEW: Helper for generating fake demo data ---
+# --- Helper for generating fake demo data ---
 def _generate_fake_state(domain_configs):
     """Builds a fake app_state dict with random data."""
     logger.info("Demo Mode: Generating fake state for dashboard.")
@@ -109,7 +104,6 @@ def _generate_fake_state(domain_configs):
             'ssl_last_renew': now - timedelta(days=random.randint(1, 30))
         }
     return fake_state
-# --- END NEW ---
 
 # --- Main Dashboard Route ---
 
@@ -163,11 +157,10 @@ def trigger_ddns():
     """
     Manually triggers the global DDNS update check.
     """
-    # --- NEW: Disable in demo mode ---
+    # --- Disable in demo mode ---
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-    # --- END NEW ---
 
     logger.info("Manual global DDNS update triggered by user.")
     try:
@@ -205,11 +198,10 @@ def trigger_create_cert(domain_name):
     """
     Manually triggers a NEW SSL certificate creation (bypasses auto_update).
     """
-    # --- NEW: Disable in demo mode ---
+    # --- Disable in demo mode ---
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-    # --- END NEW ---
 
     logger.info(f"[{domain_name}] Manual SSL creation triggered by user.")
     
@@ -294,11 +286,10 @@ def trigger_refresh_ip(domain_name):
     Refreshes just the 'Recorded IP' for a single domain.
     Does not perform an update.
     """
-    # --- NEW: Disable in demo mode ---
+    # --- Disable in demo mode ---
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-    # --- END NEW ---
 
     logger.info(f"[{domain_name}] Manual refresh of recorded IP triggered.")
     try:
@@ -321,11 +312,10 @@ def trigger_force_update_ip(domain_name):
     """
     Forces an update of a single domain's IP, bypassing auto_update checks.
     """
-    # --- NEW: Disable in demo mode ---
+    # --- Disable in demo mode ---
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-    # --- END NEW ---
 
     logger.info(f"[{domain_name}] Manual FORCE update triggered by user.")
     try:
@@ -379,11 +369,11 @@ def view_log(domain_name):
     """
     Renders a page to view logs for a specific domain.
     """
-    # --- NEW: Show fake log in demo mode ---
+    # --- Show fake log in demo mode ---
     if IS_DEMO_MODE:
         logger.info(f"Demo Mode: Showing fake log for [{domain_name}]")
         
-        # --- NEW: Determine a fake parent domain for SSL logs ---
+        # --- Determine a fake parent domain for SSL logs ---
         fake_parent = "example.com"
         if '.' in domain_name:
             parts = domain_name.split('.')
@@ -391,7 +381,6 @@ def view_log(domain_name):
                 fake_parent = ".".join(parts[1:])
             else:
                 fake_parent = domain_name
-        # --- END NEW ---
 
         log_content = (
             f"--- DEMO MODE: Showing fake logs for [{domain_name}] ---\n\n"
@@ -406,7 +395,6 @@ def view_log(domain_name):
             f"2025-11-15 07:30:02 - INFO - [{fake_parent}] Re-checking SSL expiration date after renewal.\n"
         )
         return render_template('view_log.html', log_content=log_content, domain_name=domain_name)
-    # --- END NEW ---
 
     log_content = ""
     filter_key = f"[{domain_name}]"

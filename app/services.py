@@ -20,7 +20,6 @@ from app.app import config
 logger = logging.getLogger(__name__)
 
 # --- Helper function for getting timezone ---
-# (Moved to the top to be available to all classes)
 def get_user_timezone():
     """Gets the pytz timezone object from config."""
     try:
@@ -30,7 +29,7 @@ def get_user_timezone():
         logger.warning(f"Unknown timezone '{tz_name}'. Defaulting to UTC.")
         return pyt_timezone('UTC')
 
-# --- Notification Service (FIXED) ---
+# --- Notification Service ---
 
 class NotificationService:
     """Handles sending all notifications via Apprise AND a custom SMTP handler."""

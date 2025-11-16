@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 2. Expandable Row Logic ---
-    // (Moved from index.html to keep all JS in one file)
     document.querySelectorAll('.domain-row').forEach(row => {
         row.addEventListener('click', (e) => {
             // Don't toggle row if clicking a link or button
@@ -52,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- 3. Table Sorting Logic (FIXED) ---
+    // --- 3. Table Sorting Logic ---
     const tableBody = document.querySelector('.domain-table tbody');
     
     // Only run sorting code if the table exists
@@ -69,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return row.querySelector('td:nth-child(2) span').innerText.toLowerCase();
                 case 'ssl-expire':
                     const text = row.querySelector('td:nth-child(3)').innerText.trim();
-                    if (text.includes('-')) return text; // "2025-11-14"
+                    if (text.includes('-')) return text; 
                     if (text === 'Missing') return '1000-01-01'; // Sorts Missing first
                     return '1000-01-02'; // Sorts N/A second
                 case 'default':
