@@ -12,6 +12,11 @@ chown -R www-data:www-data /logs
 touch /config/app_state.json
 chown -R www-data:www-data /config
 
+# Set permissions for the /certs directory
+# This is needed so www-data can create new domain folders
+echo "Setting permissions for /certs..."
+chown -R www-data:www-data /certs
+
 # Set gunicorn web server options
 # We use a single worker to prevent duplicate schedulers
 GUNICORN_CMD_ARGS="--bind 0.0.0.0:8080 --workers 1 --threads 4 --timeout 120 --user www-data --group www-data"
