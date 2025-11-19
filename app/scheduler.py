@@ -249,16 +249,20 @@ def run_ddns_update():
         
         save_state()
 
-def run_ssl_check():
+def _run_ssl_check_thread():
     """
-    Loops through each SSL-enabled domain
-    and runs a renewal check for its specific config dir.
+    The actual worker function that runs in a background thread.
+    It includes sleeps to prevent rate limiting.
     """
     with app.app_context():
-        logger.info("Scheduler: Running daily SSL renewal checks...")
+        logger.info("Scheduler: Background SSL thread started.")
         global_notifications_enabled = config.get('notifications', {}).get('enabled', False)
         
-        for domain_config in config.get_domains():
+        domains = config.get_domains()
+        total_domains = len(domains)
+        
+        for i, domain_config in enumerate(domains):
+            # Check if SSL is enabled for this domain
             if not domain_config.get('ssl', {}).get('enabled'):
                 continue
 
@@ -268,37 +272,67 @@ def run_ssl_check():
             domain_notifications_enabled = domain_config.get('notifications', True)
             send_alerts = global_notifications_enabled and domain_notifications_enabled
             
+            # --- 1. The Check Logic ---
             if not cert_monitor.get_cert_expiration_date(domain_name):
                 logger.info(f"[{domain_name}] Skipping renewal check, certificate is missing.")
-                continue
-
-            
-            logger.info(f"[{domain_name}] Checking for SSL renewal (Auto-update: {auto_update_enabled})...")
-            success, output = cert_service.run_renewal_check(domain_name, auto_update_enabled)
-        
-            if not success:
-                logger.error(f"[{domain_name}] Certbot renewal check FAILED. Output: {output}")
-                if send_alerts:
-                    notify_service.send_notification(
-                        f"SSL Certificate Renewal FAILED for {domain_name}",
-                        f"The daily 'certbot renew' command failed. See logs for details.\n\nOutput:\n{output}"
-                    )
             else:
-                logger.info(f"[{domain_name}] Certbot renewal check completed. Output: {output}")
-                if "Congratulations, all renewals succeeded" in output or "Renewed" in output:
-                    app_state['domain_states'][domain_name]['ssl_last_renew'] = get_current_time_in_tz()
+                logger.info(f"[{domain_name}] Checking for SSL renewal (Auto-update: {auto_update_enabled})...")
+                success, output = cert_service.run_renewal_check(domain_name, auto_update_enabled)
+            
+                if not success:
+                    logger.error(f"[{domain_name}] Certbot renewal check FAILED. Output: {output}")
                     if send_alerts:
                         notify_service.send_notification(
-                            "SSL Certificate Renewed Successfully",
-                            f"SSL certificate for {domain_name} was successfully renewed.\n\nOutput:\n{output}"
+                            f"SSL Certificate Renewal FAILED for {domain_name}",
+                            f"The daily 'certbot renew' command failed. See logs for details.\n\nOutput:\n{output}"
                         )
+                else:
+                    logger.info(f"[{domain_name}] Certbot renewal check completed. Output: {output}")
+                    if "Congratulations, all renewals succeeded" in output or "Renewed" in output:
+                        app_state['domain_states'][domain_name]['ssl_last_renew'] = get_current_time_in_tz()
+                        if send_alerts:
+                            notify_service.send_notification(
+                                "SSL Certificate Renewed Successfully",
+                                f"SSL certificate for {domain_name} was successfully renewed.\n\nOutput:\n{output}"
+                            )
+                
+                logger.info(f"[{domain_name}] Re-checking SSL expiration date after renewal.")
+                expiry_date = cert_monitor.get_cert_expiration_date(domain_name)
+                if domain_name in app_state['domain_states']:
+                    app_state['domain_states'][domain_name]['ssl_expiration'] = expiry_date
             
-            logger.info(f"[{domain_name}] Re-checking SSL expiration date after renewal.")
-            expiry_date = cert_monitor.get_cert_expiration_date(domain_name)
-            if domain_name in app_state['domain_states']:
-                app_state['domain_states'][domain_name]['ssl_expiration'] = expiry_date
-        
-        save_state()
+            save_state()
+            
+            # --- 2. The "Nap" Logic ---
+            # Do not sleep after the very last domain
+            if i < total_domains - 1:
+                processed_count = i + 1
+                
+                # Every 10 domains, sleep 3 hours
+                if processed_count % 10 == 0:
+                    logger.info(f"SSL Batch: Processed {processed_count} domains. Sleeping 3 hours to respect rate limits...")
+                    time.sleep(10800) # 3 hours
+                else:
+                    # Otherwise, sleep 10 minutes
+                    logger.info(f"SSL Batch: Processed {domain_name}. Sleeping 10 minutes before next domain...")
+                    time.sleep(600) # 10 minutes
+
+        logger.info("Scheduler: Background SSL checks completed for all domains.")
+
+def run_ssl_check():
+    """
+    Triggers the SSL check in a separate thread so it doesn't block the scheduler.
+    """
+    logger.info("Scheduler: Triggering threaded SSL renewal checks...")
+    
+    # Check if a thread is already running to prevent double-stacking
+    for thread in threading.enumerate():
+        if thread.name == "SSL_Worker_Thread":
+            logger.warning("SSL Check triggered, but a previous SSL thread is still running. Skipping.")
+            return
+
+    t = threading.Thread(target=_run_ssl_check_thread, name="SSL_Worker_Thread", daemon=True)
+    t.start()
 
 def run_log_cleanup():
     """

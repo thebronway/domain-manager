@@ -127,13 +127,88 @@ def index():
             next_ddns_run = get_next_run_time("run_ddns_update")
             next_ssl_run = get_next_run_time("run_ssl_check")
         # --- END NEW ---
+
+        # --- Calculate Summary Stats ---
+        summary = {
+            "ip_total_enabled": 0,
+            "ip_synced": 0,
+            "ip_mismatch": 0,
+            "ssl_total_enabled": 0,
+            "ssl_valid": 0,
+            "ssl_expiring": 0,
+            "next_cert_domain": None,
+            "next_cert_date": None
+        }
+        
+        # Set a threshold for "Expiring Soon" (e.g., 30 days)
+        tz = get_user_timezone()
+        now_aware = datetime.now(tz)
+        expiration_threshold = now_aware + timedelta(days=30)
+        
+        # Track earliest expiry
+        earliest_expiry = None
+
+        for d in domain_configs:
+            d_name = d['name']
+            d_state = dashboard_state.get('domain_states', {}).get(d_name, {})
             
+            # 1. IP Stats
+            if d.get('ddns', False):
+                summary['ip_total_enabled'] += 1
+                pub = dashboard_state.get('public_ip')
+                rec = d_state.get('recorded_ip')
+                
+                if pub and rec and pub == rec:
+                    summary['ip_synced'] += 1
+                elif rec and not rec.startswith('ALIAS'):
+                     summary['ip_mismatch'] += 1
+            
+            # 2. SSL Stats
+            if d.get('ssl', {}).get('enabled', False):
+                summary['ssl_total_enabled'] += 1
+                exp = d_state.get('ssl_expiration')
+                
+                if exp:
+                    if exp.tzinfo is None:
+                        exp = pytz.utc.localize(exp)
+                    
+                    # Track earliest expiration date
+                    if earliest_expiry is None or exp < earliest_expiry:
+                        earliest_expiry = exp
+                        summary['next_cert_domain'] = d_name
+                        summary['next_cert_date'] = exp
+
+                    if exp < expiration_threshold:
+                        summary['ssl_expiring'] += 1
+                    else:
+                        summary['ssl_valid'] += 1
+                else:
+                    # Missing cert
+                    summary['ssl_expiring'] += 1
+
         return render_template('index.html', 
                                app_state=dashboard_state, 
                                domain_configs=domain_configs,
                                next_ddns_run=next_ddns_run,
                                next_ssl_run=next_ssl_run,
-                               demo_mode=IS_DEMO_MODE) # Pass demo_mode to template
+                               summary=summary,
+                               demo_mode=IS_DEMO_MODE)
+    except Exception as e:
+        logger.error(f"Error rendering dashboard: {e}")
+        flash(f"An error occurred while loading the dashboard: {e}", "danger")
+        
+        default_state = {
+            "public_ip": "Error",
+            "last_ip_check_time": None,
+            "domain_states": {}
+        }
+        return render_template('index.html', 
+                                app_state=default_state, 
+                                domain_configs=[], 
+                                next_ddns_run="Error", 
+                                next_ssl_run="Error",
+                                summary={},
+                                demo_mode=IS_DEMO_MODE)
     except Exception as e:
         logger.error(f"Error rendering dashboard: {e}")
         flash(f"An error occurred while loading the dashboard: {e}", "danger")

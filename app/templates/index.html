@@ -10,18 +10,12 @@
         </div>
     </div>
 
-    <!-- Top Bar -->
     <div class="top-bar">
         <div class="top-bar-left">
             <h1>Domain Manager</h1>
         </div>
         <div class="top-bar-right">
-            <div class="scheduler-status">
-                Next IP Check: <strong>{{ next_ddns_run }}</strong><br>
-                Next SSL Check: <strong>{{ next_ssl_run }}</strong>
-            </div>
             
-            <!-- Actions Dropdown -->
             <div class="actions-dropdown" tabindex="0">
                 <button class="actions-dropdown-button" {{ 'disabled' if demo_mode }}>Actions ▼</button>
                 <div class="actions-dropdown-content">
@@ -43,6 +37,59 @@
             
         </div>
     </div>
+
+    <div class="summary-section" id="summary-block">
+        <div class="summary-grid">
+            
+            <div class="summary-left">
+                {% if summary.ip_total_enabled > 0 %}
+                    {% if summary.ip_synced == summary.ip_total_enabled %}
+                        <span class="stat-badge status-matched">IPs: {{ summary.ip_synced }}/{{ summary.ip_total_enabled }} Synced</span>
+                    {% else %}
+                        <span class="stat-badge status-mismatch">IPs: {{ summary.ip_synced }}/{{ summary.ip_total_enabled }} Synced ({{ summary.ip_mismatch }} Mismatch)</span>
+                    {% endif %}
+                {% endif %}
+
+                {% if summary.ssl_total_enabled > 0 %}
+                    {% if summary.ssl_valid == summary.ssl_total_enabled %}
+                        <span class="stat-badge status-matched">SSL: {{ summary.ssl_valid }}/{{ summary.ssl_total_enabled }} Valid</span>
+                    {% else %}
+                        <span class="stat-badge status-mismatch">SSL: {{ summary.ssl_valid }}/{{ summary.ssl_total_enabled }} Valid ({{ summary.ssl_expiring }} Expiring)</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <div class="summary-right">
+                <div><strong>Next IP Check:</strong> {{ next_ddns_run }}</div>
+                <div><strong>Next SSL Check:</strong> {{ next_ssl_run }}</div>
+
+                {% if summary.next_cert_domain %}
+                <div style="margin-top: 5px; font-size: 0.9em; color: var(--text-color-light);">
+                    Next SSL Cert Expiration: <strong>{{ summary.next_cert_domain }}</strong> on {{ summary.next_cert_date.strftime('%Y-%m-%d') }}
+                </div>
+                {% endif %}
+
+                <div style="margin-top: 5px; font-size: 0.9em; color: var(--text-color);">
+                    <strong>Current Public IP:</strong> {{ app_state.public_ip or 'Unknown' }}
+                </div>
+            </div>
+        </div>
+        
+        <button class="summary-toggle" onclick="toggleSummary()" id="summary-toggle-btn">Show Summary ▼</button>
+    </div>
+
+    <script>
+        function toggleSummary() {
+            const block = document.getElementById('summary-block');
+            const btn = document.getElementById('summary-toggle-btn');
+            block.classList.toggle('is-open');
+            if (block.classList.contains('is-open')) {
+                btn.innerText = "Hide Summary ▲";
+            } else {
+                btn.innerText = "Show Summary ▼";
+            }
+        }
+    </script>
 
     <table class="domain-table">
         <thead>
@@ -115,17 +162,24 @@
                     <tr class="expandable-content" id="details-{{ loop.index }}">
                         <td colspan="4">
                             <div class="details-grid">
-                                <div><strong>Current Public IP:</strong> {{ app_state.public_ip or 'N/A' }}</div>
-                                <div><strong>Recorded IP (Route 53):</strong> 
-                                    {{ state.get('recorded_ip') or 'N/A' }}
-                                    <a href="{{ url_for('trigger_refresh_ip', domain_name=domain_name) }}" 
-                                       class="refresh-icon" 
-                                       title="Refresh Recorded IP"
-                                       {{ 'onclick="return false;"' if demo_mode }} 
-                                       style="{{ 'opacity: 0.3; cursor: not-allowed;' if demo_mode }}">⟳</a>
-                                </div>
-                                <div><strong>DDNS Last Update:</strong> {{ state.get('last_update_time').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('last_update_time') else 'N/A' }}</div>
-                                <div><strong>SSL Last Renew:</strong> {{ state.get('ssl_last_renew').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('ssl_last_renew') else 'N/A' }}</div>
+                                
+                                {% if ddns_enabled %}
+                                    <div><strong>Current Public IP:</strong> {{ app_state.public_ip or 'N/A' }}</div>
+                                    <div><strong>Recorded IP (Route 53):</strong> 
+                                        {{ state.get('recorded_ip') or 'N/A' }}
+                                        <a href="{{ url_for('trigger_refresh_ip', domain_name=domain_name) }}" 
+                                           class="refresh-icon" 
+                                           title="Refresh Recorded IP"
+                                           {{ 'onclick="return false;"' if demo_mode }} 
+                                           style="{{ 'opacity: 0.3; cursor: not-allowed;' if demo_mode }}">⟳</a>
+                                    </div>
+                                    <div><strong>DDNS Last Update:</strong> {{ state.get('last_update_time').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('last_update_time') else 'N/A' }}</div>
+                                {% endif %}
+
+                                {% if ssl_enabled %}
+                                    <div><strong>SSL Last Renew:</strong> {{ state.get('ssl_last_renew').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('ssl_last_renew') else 'N/A' }}</div>
+                                {% endif %}
+
                                 <div><strong>Notifications:</strong> 
                                     {% if notifications_enabled %}
                                         <span style="color: var(--status-matched-bg);">Enabled</span>

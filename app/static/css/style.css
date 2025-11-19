@@ -1,11 +1,11 @@
 /* --- 1. CSS Variables (Default: Light Mode) --- */
 :root {
-    --bg-color: #f4f7f6;
-    --page-bg-color: #ffffff;
-    --text-color: #333333;
-    --text-color-light: #555555;
-    --border-color: #eeeeee;
-    --header-color: #111111;
+    --bg-color: #f0f2f5;
+    --page-bg-color: #fbfbfb;
+    --text-color: #2c3e50;
+    --text-color-light: #606f7b;
+    --border-color: #e2e8f0;
+    --header-color: #1a202c;
     --table-header-bg: #f8f9fa;
     --table-row-hover: #f1f1f1;
     --table-expand-bg: #fafafa;
@@ -31,15 +31,15 @@
 
 /* --- 2. Dark Mode Overrides --- */
 :root.dark-mode {
-    --bg-color: #121212;
-    --page-bg-color: #1e1e1e;
-    --text-color: #e0e0e0;
-    --text-color-light: #aaaaaa;
-    --border-color: #333333;
-    --header-color: #ffffff;
-    --table-header-bg: #2c2c2c;
-    --table-row-hover: #2a2a2a;
-    --table-expand-bg: #222222;
+    --bg-color: #181a1b;
+    --page-bg-color: #242729;
+    --text-color: #e8e6e3;
+    --text-color-light: #b0b3b8;
+    --border-color: #3b4045;
+    --header-color: #f0f6fc;
+    --table-header-bg: #2d3135;
+    --table-row-hover: #323539;
+    --table-expand-bg: #2b2d31;
     --link-color: #3391ff;
     --link-hover-color: #66afff;
     --button-bg: #3391ff;
@@ -437,7 +437,84 @@ body {
     display: none;
 }
 
-/* --- 13. Mobile Responice Styles --- */
+/* --- 13. Dashboard Summary Block --- */
+.summary-section {
+    margin-bottom: 20px;
+    background-color: var(--page-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+}
+
+.summary-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.summary-left {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background-color: var(--table-expand-bg);
+    border: 1px solid var(--border-color);
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--text-color); /* Default text color */
+}
+
+/* Force high contrast for status badges */
+.stat-badge.status-matched {
+    background-color: var(--status-matched-bg);
+    color: #ffffff; /* White text on Green */
+    border-color: var(--status-matched-bg);
+}
+
+.stat-badge.status-mismatch {
+    background-color: var(--status-mismatch-bg);
+    color: #000000; /* Black text on Yellow */
+    border-color: var(--status-mismatch-bg);
+}
+
+.summary-right {
+    text-align: right;
+    font-size: 0.9em;
+    color: var(--text-color-light);
+    line-height: 1.4;
+}
+
+/* Mobile Toggle for Summary */
+.summary-toggle {
+    display: none; /* Hidden on desktop */
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--link-color);
+    font-weight: bold;
+    padding: 10px 0;
+    cursor: pointer;
+    text-align: center;
+    /* Border and Margin removed from default state */
+}
+
+/* Only show the separator line when the summary is OPEN */
+.summary-section.is-open .summary-toggle {
+    border-top: 1px solid var(--border-color);
+    margin-top: 10px;
+}
+
+/* --- 14. Mobile Responice Styles --- */
 /* Using 768px as the breakpoint. Any screen this size or smaller will use these styles. */
 @media (max-width: 768px) {
 
@@ -453,9 +530,42 @@ body {
 
     /* --- Top Bar --- */
     .top-bar {
-        flex-direction: column; /* Stack items vertically */
-        align-items: stretch; /* Stretch items to full width */
+        flex-direction: column; 
+        align-items: stretch;
         gap: 15px;
+        margin-bottom: 10px; /* Reduce gap */
+    }
+
+    /* --- Summary Block Mobile --- */
+    .summary-section {
+        padding: 10px;
+    }
+    
+    .summary-grid {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        /* Hidden by default on mobile, toggled via JS or details */
+        display: none; 
+    }
+    
+    .summary-section.is-open .summary-grid {
+        display: flex;
+    }
+
+    .summary-toggle {
+        display: block; /* Show the toggle button */
+    }
+    
+    .summary-left {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .summary-right {
+        text-align: center;
+        border-top: 1px solid var(--border-color);
+        padding-top: 10px;
     }
     
     .top-bar-left {
@@ -531,6 +641,9 @@ body {
     .domain-table td:first-child {
         background-color: var(--table-header-bg);
         border-radius: 4px 4px 0 0;
+        /* --- CHANGE: Align items to the left --- */
+        justify-content: flex-start; 
+        gap: 10px;
     }
     
     .domain-table td:first-child strong {
@@ -544,10 +657,13 @@ body {
 
     /* Show and style the new mobile icon */
     .mobile-expand-icon {
-        display: inline-block; /* Show it */
-        font-size: 0.7em;
+        display: inline-block;
+        font-size: 0.8em;
         color: var(--text-color-light);
-        padding-left: 10px; /* Add some space */
+        /* --- CHANGE: Move arrow to the start (left) --- */
+        order: -1; 
+        padding-left: 0;
+        padding-right: 5px;
         transition: transform 0.2s ease-in-out;
     }
 
