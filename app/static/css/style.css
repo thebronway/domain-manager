@@ -27,6 +27,10 @@
     --status-error-text: #ffffff;
     --status-unknown-bg: #6c757d;
     --status-unknown-text: #ffffff;
+
+    /* New Variables for Forms */
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
 }
 
 /* --- 2. Dark Mode Overrides --- */
@@ -48,6 +52,9 @@
     --button-secondary-bg: #5a6268;
     --button-secondary-text: #ffffff;
     --button-secondary-hover-bg: #4a5157;
+
+    --input-bg: #181a1b;
+    --input-border: #5a6268;
 }
 
 /* --- 3. Base Styles (using variables) --- */
@@ -97,7 +104,8 @@ body {
 .top-bar-right {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 10px;
+    flex-direction: row; 
 }
 
 .scheduler-status {
@@ -116,7 +124,11 @@ body {
 .actions-dropdown-button {
     background-color: var(--button-bg);
     color: var(--button-text);
-    padding: 8px 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 38px;
+    padding: 0 15px;
     font-size: 14px;
     font-weight: bold;
     border: none;
@@ -144,6 +156,11 @@ body {
     border-radius: 4px;
 }
 
+/* Added for JS toggle */
+.actions-dropdown-content.show {
+    display: block;
+}
+
 .actions-dropdown-content form {
     display: block;
     margin: 0;
@@ -167,7 +184,7 @@ body {
 }
 
 .actions-dropdown:focus-within .actions-dropdown-content {
-    display: block;
+    /* display: block;  <-- Handled by JS .show class now */
 }
 
 
@@ -320,12 +337,16 @@ body {
 
 /* Buttons */
 .btn {
-    padding: 8px 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 38px;
+    padding: 0 15px;
+    box-sizing: border-box;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     text-decoration: none;
-    display: inline-block;
     font-size: 14px;
     font-weight: bold;
     margin-right: 10px;
@@ -347,9 +368,19 @@ body {
 
 /* Small Button (for "View" logs) */
 .btn-sm {
+    height: auto;
+    display: inline-block;
     padding: 4px 10px;
     font-size: 12px;
     font-weight: normal;
+}
+/* Success Button */
+.btn-success {
+    background-color: var(--status-matched-bg);
+    color: white;
+}
+.btn-success:hover {
+    background-color: #218838;
 }
 
 /* --- 9. Loading Overlay --- */
@@ -391,7 +422,7 @@ body {
     text-decoration: underline;
 }
 
-/* --- 11. Sort Icon Box (We fixed this) --- */
+/* --- 11. Sort Icon Box --- */
 .sort-icon {
     display: inline-block;
     border: 1px solid var(--border-color);
@@ -425,7 +456,7 @@ body {
     color: var(--link-color);
 }
 
-/* --- 12. Disabled Dropdown Button (We fixed this) --- */
+/* --- 12. Disabled Dropdown Button --- */
 .actions-dropdown-content button:disabled {
     color: var(--text-color-light);
     cursor: not-allowed;
@@ -577,9 +608,48 @@ body {
     }
     
     .top-bar-right {
-        flex-direction: column-reverse; /* Put theme toggle on top */
-        align-items: stretch; /* Full-width buttons */
+        display: flex;
+        /* MOBILE: Stack vertically, reversed so Moon is on TOP, Back is on BOTTOM */
+        flex-direction: column-reverse; 
         gap: 10px;
+        width: 100%;
+    }
+
+    /* Moon Icon */
+    .top-bar-right .theme-button {
+        align-self: flex-end; /* Align to right */
+        margin: 0;
+    }
+
+    /* Back Button */
+    .top-bar-right .btn {
+        width: 100%;
+        text-align: center;
+        margin: 0;
+    }
+
+    /* 1. Icons: Sit side-by-side at the top */
+    .top-bar-right .theme-button {
+        order: 1;
+        width: auto;
+        margin: 0;
+    }
+
+    /* 2. Buttons: Force to new line, full width, stacked */
+    .top-bar-right .btn,
+    .top-bar-right .actions-dropdown {
+        order: 2;
+        width: 100%;
+        flex: 0 0 100%; /* Force break to new line */
+        margin-right: 0;
+        box-sizing: border-box;
+    }
+
+    /* Fix the dropdown button width specifically */
+    .top-bar-right .actions-dropdown-button {
+        width: 100%;
+        display: flex;
+        justify-content: center;
     }
     
     .scheduler-status {
@@ -719,4 +789,397 @@ body {
         box-sizing: border-box; /* Ensure padding doesn't break width */
     }
 
+}
+
+/* --- 14. New Sytles and Settings for Logs  --- */
+/* Settings Page Container */
+.settings-container {
+    padding: 0 10px;
+}
+
+/* Tabs */
+.tabs {
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 25px;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+}
+
+.tab-link {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--text-color-light);
+    border-bottom: 3px solid transparent;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tab-link:hover {
+    color: var(--text-color);
+}
+
+.tab-link.active {
+    color: var(--link-color);
+    border-bottom-color: var(--link-color);
+}
+
+.tab-content {
+    display: none;
+    animation: fadeEffect 0.2s;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeEffect {
+    from {opacity: 0;}
+    to {opacity: 1;}
+}
+
+/* Form Groups */
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-size: 14px;
+    box-sizing: border-box;
+}
+.form-control:focus {
+    outline: none;
+    border-color: var(--link-color);
+}
+
+/* Helpers */
+.help-text {
+    font-size: 0.9em;
+    color: var(--text-color-light);
+    margin-bottom: 8px;
+}
+.mb-15 { margin-bottom: 15px; }
+.mt-15 { margin-top: 15px; }
+
+/* Grid Layouts for Form */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.row-align {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Settings Table (Domains) */
+.settings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+.settings-table th {
+    text-align: left;
+    padding: 10px;
+    border-bottom: 2px solid var(--border-color);
+    font-weight: 600;
+    vertical-align: bottom; /* Align SSL header to bottom */
+    padding-bottom: 5px;   /* Reduce padding under main header */
+}
+
+/* Style for the sub-header row (e.g., Manage Certs, Enable Wildcard) */
+.settings-table .sub-header-row th {
+    font-size: 0.85em;
+    font-weight: 500;
+    color: var(--text-color-light);
+    border-bottom: 1px solid var(--border-color); /* Lighter border */
+    padding-top: 5px; /* Adjust padding */
+    padding-bottom: 10px;
+}
+/* Ensure the first empty th in sub-header also has a border */
+.settings-table .sub-header-row th:first-child {
+    border-bottom: 1px solid var(--border-color);
+}
+.settings-table td {
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.settings-table .text-center {
+    text-align: center;
+}
+.settings-table input[type="checkbox"] {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+/* Delete Button (X) */
+.btn-icon-danger {
+    background: none;
+    border: none;
+    color: var(--status-error-bg);
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 5px;
+}
+.btn-icon-danger:hover {
+    color: #a71d2a;
+    transform: scale(1.1);
+}
+
+/* Switch / Toggle */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--button-secondary-bg);
+    transition: .4s;
+    border-radius: 34px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+input:checked + .slider {
+    background-color: var(--status-matched-bg);
+}
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+/* Sub-sections (SMTP/Webhooks) */
+.sub-section {
+    background-color: var(--table-expand-bg);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+.alert-box {
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    margin-top: 10px;
+}
+.alert-box.info {
+    background-color: rgba(23, 162, 184, 0.1);
+    color: #17a2b8;
+    border: 1px solid rgba(23, 162, 184, 0.2);
+}
+
+/* Webhook Rows */
+.webhook-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: var(--table-expand-bg);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+.webhook-controls {
+    min-width: 160px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+}
+.webhook-input {
+    flex-grow: 1;
+}
+
+/* Form Actions */
+.form-actions {
+    margin-top: 30px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
+    text-align: right;
+}
+.big-save-btn {
+    padding: 12px 30px;
+    font-size: 16px;
+}
+
+/* Log Page Styles */
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.log-container {
+    background-color: #1e1e1e;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 12px;
+    height: 70vh;
+    overflow-y: auto;
+    color: #d4d4d4;
+    white-space: normal;
+    display: flex;
+    flex-direction: column;
+}
+
+.log-line {
+    display: block;
+    width: 100%;
+    padding: 2px 4px;
+    margin: 0;
+    line-height: 1.2;
+    white-space: pre-wrap; 
+    border: none; 
+}
+
+/* Syntax Highlighting Classes */
+.log-error {
+    background-color: #dc3545; 
+    color: #ffffff;
+}
+
+.log-warning {
+    color: #ffc107;
+}
+
+.log-success {
+    color: #28a745;
+}
+
+.styled-link {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.styled-link:hover {
+    color: var(--link-hover-color);
+}
+
+/* Larger Theme Button on Settings Page */
+.large-theme-button {
+    height: auto;
+    width: auto;
+    padding: 8px 15px;
+    background-color: var(--button-secondary-bg);
+    color: var(--button-secondary-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s;
+}
+.large-theme-button:hover {
+    background-color: var(--button-secondary-hover-bg);
+}
+.large-theme-button svg {
+    stroke: currentColor; /* Use button text color for icon */
+}
+/* Mobile Responsive for New Settings */
+@media (max-width: 768px) {
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+    .webhook-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .webhook-controls {
+        margin-bottom: 5px;
+    }
+    
+    /* --- Settings Table Mobile --- */
+    .settings-table, .settings-table tbody, .settings-table tr, .settings-table td {
+        display: block;
+        width: 100%;
+    }
+    .settings-table tr {
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        padding: 15px;
+        border-radius: 6px;
+        background-color: var(--bg-color);
+        /* FIX BLEED: Ensure padding is included in width calculation */
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    /* Ensure the container doesn't overflow */
+    .settings-table {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .settings-table td {
+        border: none;
+        padding: 8px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .settings-table td:last-child {
+        border-bottom: none;
+        justify-content: flex-end;
+    }
+    .settings-table thead {
+        display: none;
+    }
+    
+    /* MAGIC: Show labels on mobile */
+    .settings-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--text-color);
+        text-align: left;
+    }
+    /* Hide label for Domain Name input (it's obvious) */
+    .settings-table td[data-label="Domain Name"]::before {
+        display: none;
+    }
+}
+/* Force readable link color in Dark Mode */
+:root.dark-mode .styled-link {
+    color: #66b0ff !important;
 }

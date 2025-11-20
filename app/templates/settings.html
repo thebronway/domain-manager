@@ -1,0 +1,408 @@
+{% extends "_layout.html" %}
+
+{% block title %}Settings - Domain Manager{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <div class="top-bar-left">
+        <h1>Settings</h1>
+    </div>
+    <div class="top-bar-right">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Dashboard</a>
+        <button id="theme-toggle" class="theme-button" title="Toggle dark/light mode" style="margin-left: 10px;"></button>
+    </div>
+</div>
+
+<div class="settings-container">
+    <div class="tabs">
+        <button class="tab-link active" onclick="openTab(event, 'tab-general')">General</button>
+        <button class="tab-link" onclick="openTab(event, 'tab-domains')">Domains</button>
+        <button class="tab-link" onclick="openTab(event, 'tab-notifications')">Notifications</button>
+    </div>
+
+    <form id="settings-form" onsubmit="saveSettings(event)">
+        
+        <div id="tab-general" class="tab-content active">
+            <div class="form-group">
+                <label for="timezone">Timezone</label>
+                <div class="help-text">
+                    Set the timezone for all displayed timestamps.<br>
+                    Full list: <a href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones" target="_blank" class="styled-link">List of tz database time zones</a>
+                </div>
+                <input type="text" id="timezone" name="timezone" class="form-control" value="{{ settings.timezone }}" placeholder="America/New_York">
+            </div>
+
+            <div class="form-group">
+                <label for="ip_check_interval">IP Check Interval</label>
+                <div class="help-text">How often to check for a public IP change.</div>
+                <select id="ip_check_interval" name="ip_check_interval" class="form-control">
+                    <option value="5m" {{ 'selected' if settings.ip_check_interval == '5m' }}>Every 5 Minutes</option>
+                    <option value="10m" {{ 'selected' if settings.ip_check_interval == '10m' }}>Every 10 Minutes</option>
+                    <option value="60m" {{ 'selected' if settings.ip_check_interval == '60m' }}>Every Hour</option>
+                    <option value="24h" {{ 'selected' if settings.ip_check_interval == '24h' }}>Daily (at Midnight)</option>
+                    <option value="disabled" {{ 'selected' if settings.ip_check_interval == 'disabled' }}>Disabled</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="log_retention">Log Retention</label>
+                <div class="help-text">
+                    How long to keep Application and Certbot log files on disk.
+                </div>
+                <select id="log_retention" name="log_retention" class="form-control">
+                    <option value="7 days" {{ 'selected' if settings.log_retention == '7 days' }}>7 Days</option>
+                    <option value="30 days" {{ 'selected' if settings.log_retention == '30 days' }}>30 Days</option>
+                    <option value="3 months" {{ 'selected' if settings.log_retention == '3 months' }}>3 Months</option>
+                    <option value="6 months" {{ 'selected' if settings.log_retention == '6 months' }}>6 Months</option>
+                    <option value="1 year" {{ 'selected' if settings.log_retention == '1 year' }}>1 Year</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="tab-domains" class="tab-content">
+            <div class="help-text mb-15">
+                Configure the domains you want to manage.<br>
+                <strong>DDNS:</strong> Updates Route53 A-records.<br>
+                <strong>SSL:</strong> Manages Let's Encrypt certs (Wildcard requires DNS-01 challenge).
+            </div>
+            
+            <table class="settings-table" id="domains-table">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Domain Name</th>
+                        <th class="text-center" style="width: 15%;">Manage DDNS</th>
+                        <th class="text-center" colspan="2" style="width: 30%;">SSL</th>
+                        <th class="text-center" style="width: 10%;">Notifications</th>
+                        <th class="text-center" style="width: 10%;">Auto-Update</th>
+                        <th class="text-center" style="width: 5%;">Delete</th>
+                    </tr>
+                    <tr class="sub-header-row">
+                        <th></th>
+                        <th></th>
+                        <th class="text-center">Manage Certs</th>
+                        <th class="text-center">Enable Wildcard</th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="domain-rows">
+                    {% for domain in settings.domains %}
+                    <tr class="domain-input-row">
+                        <td data-label="Domain Name">
+                            <input type="text" class="form-control domain-name" value="{{ domain.name }}" placeholder="example.com" required>
+                        </td>
+                        <td class="text-center" data-label="Manage DDNS">
+                            <label class="switch">
+                                <input type="checkbox" class="domain-ddns" {{ 'checked' if domain.ddns }}>
+                                <span class="slider round"></span>
+                            </label>
+                        </td>
+                        <td class="text-center" data-label="Manage Certs">
+                            <label class="switch">
+                                <input type="checkbox" class="domain-ssl-enabled" {{ 'checked' if domain.ssl.enabled }}>
+                                <span class="slider round"></span>
+                            </label>
+                        </td>
+                        <td class="text-center" data-label="Enable Wildcard">
+                            <label class="switch">
+                                <input type="checkbox" class="domain-ssl-wildcard" {{ 'checked' if domain.ssl.wildcard }}>
+                                <span class="slider round"></span>
+                            </label>
+                        </td>
+                        <td class="text-center" data-label="Notifications">
+                            <label class="switch">
+                                <input type="checkbox" class="domain-notify" {{ 'checked' if domain.notifications }}>
+                                <span class="slider round"></span>
+                            </label>
+                        </td>
+                        <td class="text-center" data-label="Auto-Update">
+                            <label class="switch">
+                                <input type="checkbox" class="domain-autoupd" {{ 'checked' if domain.auto_update }}>
+                                <span class="slider round"></span>
+                            </label>
+                        </td>
+                        <td class="text-center" data-label="Delete">
+                            <button type="button" class="btn-icon-danger" onclick="removeRow(this)">✕</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-secondary mt-15" onclick="addDomainRow()">+ Add Domain</button>
+        </div>
+
+        <div id="tab-notifications" class="tab-content">
+            <div class="form-group row-align">
+                <label class="switch">
+                    <input type="checkbox" id="notif-global-enabled" {{ 'checked' if settings.notifications.enabled }}>
+                    <span class="slider round"></span>
+                </label>
+                <span class="label-text"><strong>Enable Notifications Globally</strong></span>
+            </div>
+            <hr>
+
+            <h3>SMTP (Email)</h3>
+            <div class="sub-section">
+                <div class="form-group row-align" style="justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label class="switch">
+                            <input type="checkbox" id="smtp-enabled" {{ 'checked' if settings.notifications.smtp.enabled }}>
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="smtp-enabled">Enable SMTP</label>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="saveAndTest('smtp')">Save & Test</button>
+                </div>
+                
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Host</label>
+                        <input type="text" id="smtp-host" class="form-control" value="{{ settings.notifications.smtp.host }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Port</label>
+                        <input type="number" id="smtp-port" class="form-control" value="{{ settings.notifications.smtp.port }}">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>From Email</label>
+                        <input type="text" id="smtp-from" class="form-control" value="{{ settings.notifications.smtp.from_email }}">
+                    </div>
+                    <div class="form-group">
+                        <label>To Email</label>
+                        <input type="text" id="smtp-to" class="form-control" value="{{ settings.notifications.smtp.to_email }}">
+                    </div>
+                </div>
+                
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="smtp-user" class="form-control" value="{{ settings.notifications.smtp.user or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="smtp-pass" class="form-control" value="{{ settings.notifications.smtp.pass or '' }}">
+                    </div>
+                </div>
+            </div>
+
+            <h3>Webhooks</h3>
+            {% set services = [
+                {'id': 'discord', 'label': 'Discord'},
+                {'id': 'slack', 'label': 'Slack'},
+                {'id': 'telegram', 'label': 'Telegram'},
+                {'id': 'msteams', 'label': 'Microsoft Teams'},
+                {'id': 'pushover', 'label': 'Pushover'},
+                {'id': 'gchat', 'label': 'Google Chat'}
+            ] %}
+
+            {% for svc in services %}
+                <div class="webhook-row">
+                    <div class="webhook-controls">
+                        <label class="switch">
+                            <input type="checkbox" id="{{ svc.id }}-enabled" {{ 'checked' if settings.notifications.get(svc.id, {}).get('enabled') }}>
+                            <span class="slider round"></span>
+                        </label>
+                        <label for="{{ svc.id }}-enabled">{{ svc.label }}</label>
+                    </div>
+                    <div style="flex-grow: 1; display: flex; gap: 10px;">
+                        <input type="text" id="{{ svc.id }}-url" class="form-control webhook-input" placeholder="https://..." value="{{ settings.notifications.get(svc.id, {}).get('url', '') }}" style="flex-grow: 1;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="saveAndTest('{{ svc.id }}')">Save & Test</button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary big-save-btn" {{ 'disabled' if demo_mode }}>Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<template id="domain-row-template">
+    <tr class="domain-input-row">
+        <td data-label="Domain Name">
+            <input type="text" class="form-control domain-name" placeholder="new-domain.com" required>
+        </td>
+        <td class="text-center" data-label="Manage DDNS">
+            <label class="switch"><input type="checkbox" class="domain-ddns" checked><span class="slider round"></span></label>
+        </td>
+        <td class="text-center" data-label="Manage Certs">
+            <label class="switch"><input type="checkbox" class="domain-ssl-enabled" checked><span class="slider round"></span></label>
+        </td>
+        <td class="text-center" data-label="Enable Wildcard">
+            <label class="switch"><input type="checkbox" class="domain-ssl-wildcard"><span class="slider round"></span></label>
+        </td>
+        <td class="text-center" data-label="Notifications">
+            <label class="switch"><input type="checkbox" class="domain-notify" checked><span class="slider round"></span></label>
+        </td>
+        <td class="text-center" data-label="Auto-Update">
+            <label class="switch"><input type="checkbox" class="domain-autoupd" checked><span class="slider round"></span></label>
+        </td>
+        <td class="text-center" data-label="Delete">
+            <button type="button" class="btn-icon-danger" onclick="removeRow(this)">✕</button>
+        </td>
+    </tr>
+</template>
+
+<script>
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; tabcontent[i].classList.remove("active"); }
+        tablinks = document.getElementsByClassName("tab-link");
+        for (i = 0; i < tablinks.length; i++) { tablinks[i].classList.remove("active"); }
+        document.getElementById(tabName).style.display = "block";
+        document.getElementById(tabName).classList.add("active");
+        evt.currentTarget.classList.add("active");
+    }
+
+    function addDomainRow() {
+        const template = document.getElementById('domain-row-template');
+        const clone = template.content.cloneNode(true);
+        document.getElementById('domain-rows').appendChild(clone);
+    }
+    function removeRow(btn) { btn.closest('tr').remove(); }
+
+    // --- Gather Form Data Helper ---
+    function getSettingsData() {
+        const domains = [];
+        document.querySelectorAll('.domain-input-row').forEach(row => {
+            const name = row.querySelector('.domain-name').value.trim();
+            if(name) {
+                domains.push({
+                    name: name,
+                    ddns: row.querySelector('.domain-ddns').checked,
+                    ssl: {
+                        enabled: row.querySelector('.domain-ssl-enabled').checked,
+                        wildcard: row.querySelector('.domain-ssl-wildcard').checked
+                    },
+                    notifications: row.querySelector('.domain-notify').checked,
+                    auto_update: row.querySelector('.domain-autoupd').checked
+                });
+            }
+        });
+
+        const notifications = {
+            enabled: document.getElementById('notif-global-enabled').checked,
+            smtp: {
+                enabled: document.getElementById('smtp-enabled').checked,
+                host: document.getElementById('smtp-host').value.trim(),
+                port: parseInt(document.getElementById('smtp-port').value) || 587,
+                from_email: document.getElementById('smtp-from').value.trim(),
+                to_email: document.getElementById('smtp-to').value.trim(),
+                // Added Credentials
+                user: document.getElementById('smtp-user').value.trim(),
+                pass: document.getElementById('smtp-pass').value.trim()
+            }
+        };
+
+        ['discord', 'slack', 'telegram', 'msteams', 'pushover', 'gchat'].forEach(svc => {
+            notifications[svc] = {
+                enabled: document.getElementById(svc + '-enabled').checked,
+                url: document.getElementById(svc + '-url').value.trim()
+            };
+        });
+
+        return {
+            timezone: document.getElementById('timezone').value,
+            ip_check_interval: document.getElementById('ip_check_interval').value,
+            log_retention: document.getElementById('log_retention').value,
+            domains: domains,
+            notifications: notifications
+        };
+    }
+
+    // --- Save & Test Logic ---
+    async function saveAndTest(serviceId) {
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.innerText = "Saving...";
+        btn.disabled = true;
+
+        // 1. SAVE First
+        try {
+            const settingsData = getSettingsData();
+            const saveRes = await fetch("{{ url_for('settings') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settingsData)
+            });
+            const saveJson = await saveRes.json();
+
+            if(saveJson.status !== 'success') {
+                alert("Save Failed: " + saveJson.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            // 2. TEST Second (Now that backend has data)
+            btn.innerText = "Testing...";
+            let testUrl, testBody;
+
+            if (serviceId === 'smtp') {
+                testUrl = "{{ url_for('trigger_test_smtp') }}";
+                testBody = {};
+            } else {
+                const urlVal = document.getElementById(serviceId + '-url').value.trim();
+                testUrl = "{{ url_for('trigger_test_notification_single') }}";
+                testBody = { service: serviceId, url: urlVal };
+            }
+
+            const testRes = await fetch(testUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testBody)
+            });
+            const testJson = await testRes.json();
+
+            if(testJson.status === 'success') {
+                alert("Saved & Test Sent Successfully!");
+            } else {
+                alert("Saved, but Test Failed: " + testJson.message);
+            }
+
+        } catch(e) {
+            alert("Network Error: " + e);
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    // --- Main Save Logic ---
+    async function saveSettings(e) {
+        e.preventDefault();
+        const btn = document.querySelector('.big-save-btn');
+        const originalText = btn.innerText;
+        btn.innerText = "Saving...";
+        btn.disabled = true;
+
+        try {
+            const settingsData = getSettingsData();
+            const response = await fetch("{{ url_for('settings') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settingsData)
+            });
+
+            const result = await response.json();
+            
+            if(result.status === 'success') {
+                alert("Settings Saved Successfully!");
+                window.location.reload();
+            } else {
+                alert("Error Saving: " + result.message);
+            }
+        } catch (error) {
+            alert("Network Error: " + error);
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

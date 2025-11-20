@@ -336,76 +336,65 @@ def run_ssl_check():
 
 def run_log_cleanup():
     """
-    Scans the /certs directory and deletes any letsencrypt.log files
-    older than the 'log_retention' period specified in config.yml.
+    Deletes Certbot logs AND System logs older than the retention period.
     """
     try:
         retention_str = config.get('log_retention', '3 months')
         logger.info(f"Scheduler: Running log cleanup with retention '{retention_str}'...")
         
+        # Parse retention string
         parts = retention_str.split()
         if len(parts) != 2:
-            logger.error(f"Invalid log_retention format: '{retention_str}'. Must be 'value unit'. Using default.")
             parts = ['3', 'months']
-
+        
         try:
             value = int(parts[0])
         except ValueError:
-            logger.error(f"Invalid log_retention value: '{parts[0]}'. Must be an integer. Using default.")
             value = 3
             
         unit = parts[1].lower()
         delta_kwargs = {}
-
-        if "day" in unit:
-            delta_kwargs['days'] = value
-        elif "week" in unit:
-            delta_kwargs['weeks'] = value
-        elif "month" in unit:
-            delta_kwargs['months'] = value
-        elif "year" in unit:
-            delta_kwargs['years'] = value
-        else:
-            logger.error(f"Invalid log_retention unit: '{unit}'. Defaulting to 3 months.")
-            delta_kwargs['months'] = 3
+        if "day" in unit: delta_kwargs['days'] = value
+        elif "week" in unit: delta_kwargs['weeks'] = value
+        elif "month" in unit: delta_kwargs['months'] = value
+        elif "year" in unit: delta_kwargs['years'] = value
+        else: delta_kwargs['months'] = 3
         
-        delta = relativedelta(**delta_kwargs)
-        now = get_current_time_in_tz()
-        cutoff_date = now - delta
+        cutoff_date = get_current_time_in_tz() - relativedelta(**delta_kwargs)
         
-        logger.info(f"Deleting Certbot logs older than {cutoff_date.strftime('%Y-%m-%d')}")
-        
+        # --- 1. Clean Certbot Logs ---
         certs_dir = "/certs"
-        domains = config.get_domains()
         deleted_count = 0
         user_tz = get_user_timezone()
 
-        for domain_config in domains:
+        for domain_config in config.get_domains():
             domain_name = domain_config['name']
             domain_cert_dir = os.path.join(certs_dir, domain_name)
-            
-            if not os.path.isdir(domain_cert_dir):
-                continue
-            
-            # As per services.py, logs are in /certs/{domain_name}/letsencrypt.log*
-            try:
+            if os.path.isdir(domain_cert_dir):
                 for filename in os.listdir(domain_cert_dir):
                     if filename.startswith("letsencrypt.log"):
                         file_path = os.path.join(domain_cert_dir, filename)
-                        
                         try:
-                            file_mod_time = os.path.getmtime(file_path)
-                            file_date = datetime.fromtimestamp(file_mod_time, user_tz)
-                            
-                            if file_date < cutoff_date:
-                                logger.info(f"Deleting old log: {file_path}")
+                            if datetime.fromtimestamp(os.path.getmtime(file_path), user_tz) < cutoff_date:
                                 os.remove(file_path)
                                 deleted_count += 1
-                        except Exception as e:
-                            logger.error(f"Failed to check or delete log {file_path}: {e}")
-            except Exception as e:
-                logger.error(f"Failed to scan directory {domain_cert_dir}: {e}")
+                        except Exception:
+                            pass
         
+        # --- 2. Clean System Logs (domain-manager.log.1, .2, etc) ---
+        log_dir = "/logs"
+        if os.path.isdir(log_dir):
+            for filename in os.listdir(log_dir):
+                if filename.startswith("domain-manager.log."): # Matches rotated files
+                    file_path = os.path.join(log_dir, filename)
+                    try:
+                        if datetime.fromtimestamp(os.path.getmtime(file_path), user_tz) < cutoff_date:
+                            logger.info(f"Deleting old system log: {filename}")
+                            os.remove(file_path)
+                            deleted_count += 1
+                    except Exception:
+                        pass
+
         logger.info(f"Log cleanup complete. Deleted {deleted_count} file(s).")
 
     except Exception as e:
@@ -449,16 +438,21 @@ def run_initial_setup():
 def run_scheduler():
     """Runs the main scheduler loop in a separate thread."""
     
-    # --- Skip in demo mode ---
     if IS_DEMO_MODE:
         logger.info("Demo Mode: Scheduler is disabled.")
-        return # Do not run any jobs
+        return 
     
-    # --- Schedule jobs FIRST to fix race condition ---
+    # --- Schedule jobs ---
     
+    # 1. SSL Check
     ssl_utc_time = get_utc_time_for_local_string("02:30")
     schedule.every().day.at(ssl_utc_time).do(run_ssl_check)
     
+    # --- DEBUG LOG: Print exactly when we think we are running ---
+    tz = get_user_timezone()
+    logger.info(f"Scheduler: SSL Check scheduled for {ssl_utc_time} UTC. (Target was 02:30 {tz})")
+    
+    # 2. Log Cleanup
     log_utc_time = get_utc_time_for_local_string("03:30")
     schedule.every().day.at(log_utc_time).do(run_log_cleanup)
     

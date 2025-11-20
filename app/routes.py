@@ -3,10 +3,11 @@ import os
 import schedule
 import pytz
 import random
+import glob
 from datetime import datetime, timedelta
 from collections import deque
 
-from flask import render_template, jsonify, flash, redirect, url_for, Response
+from flask import render_template, jsonify, flash, redirect, url_for, Response, request, send_file
 from app.app import app, config
 from app.scheduler import (
     app_state, 
@@ -24,14 +25,12 @@ from app.scheduler import (
 logger = logging.getLogger(__name__)
 LOG_FILE = "/logs/domain-manager.log"
 
-IS_DEMO_MODE = config.get('demo_mode', False)
-
 # --- Helper ---
 def get_next_run_time(job_func_name):
     """
     Finds the EARLIEST next run time for a scheduled job by its function name.
     """
-    # --- Return fake data in demo mode ---
+    IS_DEMO_MODE = config.get('demo_mode', False)
     if IS_DEMO_MODE:
         if job_func_name == "run_ddns_update":
             return "Every 5 Mins (Demo)"
@@ -43,20 +42,15 @@ def get_next_run_time(job_func_name):
     next_runs = []
 
     try:
-        # Check ALL jobs
         for job in schedule.jobs.copy():
             if job.job_func.__name__ == job_func_name:
                 if job.next_run:
-                    # Store the next_run time
                     next_runs.append(job.next_run)
         
         if not next_runs:
             return "Not scheduled"
 
-        # Find the earliest time in the list
         next_run_utc = min(next_runs)
-        
-        # Convert to user timezone
         utc_time = pytz.utc.localize(next_run_utc)
         local_time = utc_time.astimezone(tz)
         
@@ -66,18 +60,16 @@ def get_next_run_time(job_func_name):
         logger.error(f"Error getting next run time for {job_func_name}: {e}")
         return "Error"
 
-# --- Helper for generating fake demo data ---
 def _generate_fake_state(domain_configs):
     """Builds a fake app_state dict with random data."""
     logger.info("Demo Mode: Generating fake state for dashboard.")
     fake_public_ip = f"1.{random.randint(10,99)}.{random.randint(10,99)}.{random.randint(10,99)}"
     
-    # Pick a few IPs to make the dashboard look realistic
     ips_to_use = [
-        fake_public_ip, # Matched
-        fake_public_ip, # Matched
-        f"2.{random.randint(10,99)}.{random.randint(10,99)}.{random.randint(10,99)}", # Mismatch
-        "ALIAS: my-alb-12345.us-east-1.elb.amazonaws.com." # Alias
+        fake_public_ip,
+        fake_public_ip,
+        f"2.{random.randint(10,99)}.{random.randint(10,99)}.{random.randint(10,99)}",
+        "ALIAS: my-alb-12345.us-east-1.elb.amazonaws.com."
     ]
     
     tz = get_user_timezone()
@@ -91,10 +83,8 @@ def _generate_fake_state(domain_configs):
 
     for d in domain_configs:
         domain_name = d['name']
-        
-        # Make some domains "missing" certs
         ssl_exp = None
-        if random.choice([True, True, False]): # 66% chance to have a cert
+        if random.choice([True, True, False]):
              ssl_exp = now + timedelta(days=random.randint(5, 85))
              
         fake_state['domain_states'][domain_name] = {
@@ -105,85 +95,88 @@ def _generate_fake_state(domain_configs):
         }
     return fake_state
 
+def _parse_log_lines(lines):
+    """
+    Parses log lines to add CSS classes for syntax highlighting.
+    """
+    parsed_lines = []
+    for line in lines:
+        clean_line = line.strip()
+        if not clean_line: 
+            continue
+            
+        css_class = ""
+        lower_line = clean_line.lower()
+        
+        if "error" in lower_line or "critical" in lower_line or "failed" in lower_line:
+            css_class = "log-error"
+        elif "warning" in lower_line:
+            css_class = "log-warning"
+        elif "success" in lower_line or "match" in lower_line or "updated to" in lower_line:
+            css_class = "log-success"
+            
+        parsed_lines.append({
+            "text": clean_line,
+            "class": css_class
+        })
+    return parsed_lines
+
 # --- Main Dashboard Route ---
 
 @app.route('/')
 def index():
-    """
-    Renders the main dashboard page.
-    """
+    IS_DEMO_MODE = config.get('demo_mode', False)
     try:
         domain_configs = config.get_domains()
         
-        # --- NEW: Fork logic for Demo vs Real ---
         if IS_DEMO_MODE:
-            # 1. GENERATE FAKE DATA
             dashboard_state = _generate_fake_state(domain_configs)
             next_ddns_run = "Every 5 Mins (Demo)"
             next_ssl_run = "02:30 Daily (Demo)"
         else:
-            # 2. USE REAL DATA (current logic)
             dashboard_state = app_state
             next_ddns_run = get_next_run_time("run_ddns_update")
             next_ssl_run = get_next_run_time("run_ssl_check")
-        # --- END NEW ---
 
-        # --- Calculate Summary Stats ---
         summary = {
-            "ip_total_enabled": 0,
-            "ip_synced": 0,
-            "ip_mismatch": 0,
-            "ssl_total_enabled": 0,
-            "ssl_valid": 0,
-            "ssl_expiring": 0,
-            "next_cert_domain": None,
-            "next_cert_date": None
+            "ip_total_enabled": 0, "ip_synced": 0, "ip_mismatch": 0,
+            "ssl_total_enabled": 0, "ssl_valid": 0, "ssl_expiring": 0,
+            "next_cert_domain": None, "next_cert_date": None
         }
         
-        # Set a threshold for "Expiring Soon" (e.g., 30 days)
         tz = get_user_timezone()
         now_aware = datetime.now(tz)
         expiration_threshold = now_aware + timedelta(days=30)
-        
-        # Track earliest expiry
         earliest_expiry = None
 
         for d in domain_configs:
             d_name = d['name']
             d_state = dashboard_state.get('domain_states', {}).get(d_name, {})
             
-            # 1. IP Stats
             if d.get('ddns', False):
                 summary['ip_total_enabled'] += 1
                 pub = dashboard_state.get('public_ip')
                 rec = d_state.get('recorded_ip')
-                
                 if pub and rec and pub == rec:
                     summary['ip_synced'] += 1
                 elif rec and not rec.startswith('ALIAS'):
                      summary['ip_mismatch'] += 1
             
-            # 2. SSL Stats
             if d.get('ssl', {}).get('enabled', False):
                 summary['ssl_total_enabled'] += 1
                 exp = d_state.get('ssl_expiration')
-                
                 if exp:
                     if exp.tzinfo is None:
                         exp = pytz.utc.localize(exp)
-                    
-                    # Track earliest expiration date
                     if earliest_expiry is None or exp < earliest_expiry:
                         earliest_expiry = exp
                         summary['next_cert_domain'] = d_name
                         summary['next_cert_date'] = exp
-
                     if exp < expiration_threshold:
                         summary['ssl_expiring'] += 1
                     else:
                         summary['ssl_valid'] += 1
                 else:
-                    # Missing cert
                     summary['ssl_expiring'] += 1
 
         return render_template('index.html', 
@@ -196,94 +189,184 @@ def index():
     except Exception as e:
         logger.error(f"Error rendering dashboard: {e}")
         flash(f"An error occurred while loading the dashboard: {e}", "danger")
-        
-        default_state = {
-            "public_ip": "Error",
-            "last_ip_check_time": None,
-            "domain_states": {}
-        }
         return render_template('index.html', 
-                                app_state=default_state, 
+                                app_state={"public_ip": "Error", "domain_states": {}}, 
                                 domain_configs=[], 
-                                next_ddns_run="Error", 
-                                next_ssl_run="Error",
-                                summary={},
-                                demo_mode=IS_DEMO_MODE)
-    except Exception as e:
-        logger.error(f"Error rendering dashboard: {e}")
-        flash(f"An error occurred while loading the dashboard: {e}", "danger")
-        
-        default_state = {
-            "public_ip": "Error",
-            "last_ip_check_time": None,
-            "domain_states": {}
-        }
-        return render_template('index.html', 
-                                app_state=default_state, 
-                                domain_configs=[], 
-                                next_ddns_run="Error", 
-                                next_ssl_run="Error",
-                                demo_mode=IS_DEMO_MODE) # Pass demo_mode here too
+                                next_ddns_run="Error", next_ssl_run="Error",
+                                summary={}, demo_mode=IS_DEMO_MODE)
 
-# --- API/Manual Trigger Routes ---
+# --- Settings Routes ---
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    IS_DEMO_MODE = config.get('demo_mode', False)
+
+    if request.method == 'POST':
+        try:
+            new_settings = request.json
+            if not new_settings:
+                return jsonify({"status": "error", "message": "No data received"}), 400
+            
+            success = config.save(new_settings)
+            
+            if success:
+                flash("Settings saved successfully.", "success")
+                return jsonify({"status": "success", "message": "Settings saved."})
+            else:
+                return jsonify({"status": "error", "message": "Failed to save settings to disk."}), 500
+        except Exception as e:
+            logger.error(f"Error saving settings: {e}")
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    return render_template('settings.html', settings=config.settings, demo_mode=IS_DEMO_MODE)
+
+# --- Log Routes ---
+
+@app.route('/logs/all')
+def view_all_logs():
+    """Shows full system logs, including rotated backups."""
+    IS_DEMO_MODE = config.get('demo_mode', False)
+    
+    if IS_DEMO_MODE:
+        fake_logs = [
+            f"2025-11-19 10:00:00 - INFO - System started in DEMO MODE.",
+            f"2025-11-19 10:05:00 - INFO - Checking public IP...",
+            f"2025-11-19 10:05:01 - INFO - Public IP matched. No update needed."
+        ]
+        return render_template('view_log.html', 
+                             log_lines=_parse_log_lines(fake_logs), 
+                             title="System Logs (Demo)", 
+                             download_endpoint="download_main_log")
+
+    try:
+        lines = deque(maxlen=20000)
+        log_files = glob.glob(f"{LOG_FILE}*")
+        
+        def get_file_sort_key(filename):
+            if filename == LOG_FILE: return 0
+            parts = filename.split('.')
+            if parts[-1].isdigit(): return int(parts[-1])
+            return 999
+
+        log_files.sort(key=get_file_sort_key, reverse=True)
+
+        for lf in log_files:
+            if os.path.exists(lf):
+                try:
+                    with open(lf, 'r') as f:
+                        for line in f:
+                            lines.append(line)
+                except Exception as read_err:
+                    logger.warning(f"Could not read rotated log {lf}: {read_err}")
+        
+        lines_list = list(lines)[::-1]
+        
+        return render_template('view_log.html', 
+                             log_lines=_parse_log_lines(lines_list), 
+                             title="System Logs",
+                             download_endpoint="download_main_log")
+    except Exception as e:
+        flash(f"Error reading logs: {e}", "danger")
+        return redirect(url_for('index'))
+
+@app.route('/logs/<domain_name>')
+def view_log(domain_name):
+    """Renders logs for a specific domain, scanning ALL files."""
+    IS_DEMO_MODE = config.get('demo_mode', False)
+    if IS_DEMO_MODE:
+         return render_template('view_log.html', log_lines=[], title=f"Demo Logs: {domain_name}", download_endpoint="download_main_log")
+
+    filter_key = f"[{domain_name}]"
+    matches = []
+    
+    try:
+        log_files = glob.glob(f"{LOG_FILE}*")
+        
+        def get_file_sort_key(filename):
+            if filename == LOG_FILE: return 0
+            parts = filename.split('.')
+            if parts[-1].isdigit(): return int(parts[-1])
+            return 999
+
+        log_files.sort(key=get_file_sort_key, reverse=True)
+
+        for lf in log_files:
+            if os.path.exists(lf):
+                try:
+                    with open(lf, 'r') as f:
+                        for line in f:
+                            if filter_key in line:
+                                matches.append(line)
+                except Exception as read_err:
+                    logger.warning(f"Could not read rotated log {lf}: {read_err}")
+        
+        last_1000 = matches[-1000:]
+        lines_list = last_1000[::-1]
+        
+        if not lines_list:
+            lines_list = [f"No specific log entries found containing '{filter_key}' in any log file."]
+            
+        return render_template('view_log.html', 
+                             log_lines=_parse_log_lines(lines_list), 
+                             title=f"Logs: {domain_name}",
+                             download_endpoint="download_main_log")
+                             
+    except Exception as e:
+        logger.error(f"Error reading log file: {e}")
+        flash(f"An error occurred while reading the log file: {e}", "danger")
+        return redirect(url_for('index'))
+
+@app.route('/api/logs/download/main')
+def download_main_log():
+    """Downloads the ACTUAL full log file from disk."""
+    try:
+        if os.path.exists(LOG_FILE):
+            return send_file(LOG_FILE, as_attachment=True, download_name='domain-manager.log')
+        else:
+            flash("Log file not found on disk.", "danger")
+            return redirect(url_for('view_all_logs'))
+    except Exception as e:
+        logger.error(f"Error downloading log file: {e}")
+        flash(f"Error downloading file: {e}", "danger")
+        return redirect(url_for('view_all_logs'))
+
+# --- Trigger Routes ---
 
 @app.route('/api/trigger/ddns', methods=['POST'])
 def trigger_ddns():
-    """
-    Manually triggers the global DDNS update check.
-    """
-    # --- Disable in demo mode ---
+    IS_DEMO_MODE = config.get('demo_mode', False)
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-
-    logger.info("Manual global DDNS update triggered by user.")
     try:
         run_ddns_update() 
         flash("Manual DDNS update check initiated.", "info")
     except Exception as e:
-        logger.error(f"Error during manual DDNS trigger: {e}")
         flash(f"An error occurred: {e}", "danger")
-    
     return redirect(url_for('index'))
 
 @app.route('/api/trigger/ssl_renew', methods=['POST'])
 def trigger_ssl():
-    """
-    Manually triggers the global SSL renewal check.
-    """
-    # --- NEW: Disable in demo mode ---
+    IS_DEMO_MODE = config.get('demo_mode', False)
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-    # --- END NEW ---
-
-    logger.info("Manual global SSL renewal triggered by user.")
     try:
         run_ssl_check()
         flash("Manual SSL renewal check initiated.", "info")
     except Exception as e:
-        logger.error(f"Error during manual SSL trigger: {e}")
         flash(f"An error occurred: {e}", "danger")
-    
     return redirect(url_for('index'))
 
 @app.route('/api/trigger/ssl_create/<domain_name>', methods=['POST'])
 def trigger_create_cert(domain_name):
-    """
-    Manually triggers a NEW SSL certificate creation (bypasses auto_update).
-    """
-    # --- Disable in demo mode ---
+    IS_DEMO_MODE = config.get('demo_mode', False)
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-
-    logger.info(f"[{domain_name}] Manual SSL creation triggered by user.")
     
     domain_config = next((d for d in config.get_domains() if d['name'] == domain_name), None)
-    
     if not domain_config:
-        logger.error(f"[{domain_name}] Manual create failed. Domain not found in config.")
         flash(f"Could not find config for {domain_name}", "danger")
         return redirect(url_for('index'))
     
@@ -293,205 +376,99 @@ def trigger_create_cert(domain_name):
 
     try:
         is_wildcard = domain_config.get('ssl', {}).get('wildcard', False)
-        
         success, output = cert_service.create_certificate(domain_name, is_wildcard)
         
         if not success:
-            logger.error(f"[{domain_name}] Certbot command failed: {output}")
-            flash(f"Failed to create certificate for {domain_name}: {output}", "danger")
+            flash(f"Failed to create certificate: {output}", "danger")
             if send_alerts:
-                notify_service.send_notification(
-                    f"SSL Certificate Creation FAILED for {domain_name}",
-                    f"A manual attempt to create an SSL certificate failed.\n\nError:\n{output}"
-                )
+                notify_service.send_notification(f"SSL Creation FAILED for {domain_name}", f"Error:\n{output}")
             return redirect(url_for('index'))
 
-        logger.info(f"[{domain_name}] Certbot command ran. Re-checking for cert file...")
         new_expiry_date = cert_monitor.get_cert_expiration_date(domain_name)
-        
         if new_expiry_date:
-            logger.info(f"[{domain_name}] New cert found! Expires: {new_expiry_date}")
             app_state['domain_states'][domain_name]['ssl_expiration'] = new_expiry_date
-            flash(f"Successfully created and verified certificate for {domain_name}.", "success")
+            flash(f"Successfully created certificate for {domain_name}.", "success")
             if send_alerts:
-                notify_service.send_notification(
-                    f"SSL Certificate Created for {domain_name}",
-                    f"A new SSL certificate was successfully created for {domain_name}.\n\n"
-                    f"It expires on: {new_expiry_date.strftime('%Y-%m-%d')}"
-                )
+                notify_service.send_notification(f"SSL Created for {domain_name}", f"Expires: {new_expiry_date.strftime('%Y-%m-%d')}")
         else:
-            logger.error(f"[{domain_name}] Certbot command Succeeded, but cert file is still not found!")
-            flash(f"Certbot command ran, but the new cert could not be found. Check logs for {domain_name}.", "warning")
-            if send_alerts:
-                notify_service.send_notification(
-                    f"SSL Certificate Creation WARNING for {domain_name}",
-                    f"The Certbot command reported success, but the application could not find the new certificate file. "
-                    f"Please check the logs for {domain_name}."
-                )
-            
+            flash(f"Certbot ran, but cert file not found.", "warning")
     except Exception as e:
-        logger.error(f"[{domain_name}] Error during manual SSL creation: {e}")
-        flash(f"An error occurred: {e}", "danger")
+        flash(f"Error: {e}", "danger")
     
-    save_state() # Save changes to state
+    save_state()
     return redirect(url_for('index'))
 
-@app.route('/api/trigger/test_notification', methods=['POST'])
-def trigger_test_notification():
-    """
-    Sends a test email notification.
-    This is allowed in Demo Mode.
-    """
-    logger.info("Manual test notification triggered by user.")
+@app.route('/api/trigger/test_notification_single', methods=['POST'])
+def trigger_test_notification_single():
     try:
-        success, message = notify_service.send_test_notification()
+        data = request.json
+        service = data.get('service')
+        url = data.get('url')
+        if not service or not url:
+            return jsonify({"status": "error", "message": "Missing service name or URL"}), 400
+        success, message = notify_service.send_single_test(service, url)
         if success:
-            flash(f"Test notification sent: {message}", "success")
+            return jsonify({"status": "success", "message": message})
         else:
-            flash(f"Test notification FAILED: {message}", "danger")
+            return jsonify({"status": "error", "message": message}), 500
     except Exception as e:
-        logger.error(f"Error during test notification trigger: {e}")
-        flash(f"An error occurred: {e}", "danger")
-    
-    return redirect(url_for('index'))
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/trigger/test_smtp', methods=['POST'])
+def trigger_test_smtp():
+    """Tests ONLY the SMTP configuration."""
+    try:
+        notify_service._load_config()
+        success, message = notify_service.send_smtp_test_only()
+        if success:
+            return jsonify({"status": "success", "message": message})
+        else:
+            return jsonify({"status": "error", "message": message}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/refresh_ip/<domain_name>', methods=['GET'])
 def trigger_refresh_ip(domain_name):
-    """
-    Refreshes just the 'Recorded IP' for a single domain.
-    Does not perform an update.
-    """
-    # --- Disable in demo mode ---
+    IS_DEMO_MODE = config.get('demo_mode', False)
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-
-    logger.info(f"[{domain_name}] Manual refresh of recorded IP triggered.")
     try:
         ip = r53_service.get_a_record_ip(domain_name)
-        
         if domain_name not in app_state['domain_states']:
              app_state['domain_states'][domain_name] = {}
-             
         app_state['domain_states'][domain_name]['recorded_ip'] = ip
         save_state()
-        flash(f"Refreshed Recorded IP for {domain_name}. New value: {ip or 'N/A'}", "info")
+        flash(f"Refreshed Recorded IP for {domain_name}. Value: {ip or 'N/A'}", "info")
     except Exception as e:
-        logger.error(f"Error during IP refresh: {e}")
-        flash(f"An error occurred refreshing IP: {e}", "danger")
-
+        flash(f"Error refreshing IP: {e}", "danger")
     return redirect(url_for('index'))
 
 @app.route('/api/force_update_ip/<domain_name>', methods=['POST'])
 def trigger_force_update_ip(domain_name):
-    """
-    Forces an update of a single domain's IP, bypassing auto_update checks.
-    """
-    # --- Disable in demo mode ---
+    IS_DEMO_MODE = config.get('demo_mode', False)
     if IS_DEMO_MODE:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
-
-    logger.info(f"[{domain_name}] Manual FORCE update triggered by user.")
     try:
         domain_config = next((d for d in config.get_domains() if d['name'] == domain_name), None)
         if not (domain_config and domain_config.get('ddns', False)):
              flash(f"Cannot update IP: {domain_name} does not have DDNS enabled.", "danger")
              return redirect(url_for('index'))
 
-        global_notifications_enabled = config.get('notifications', {}).get('enabled', False)
-        domain_notifications_enabled = domain_config.get('notifications', True) 
-        send_alerts = global_notifications_enabled and domain_notifications_enabled
         public_ip = app_state.get("public_ip")
-        old_ip = app_state.get("domain_states", {}).get(domain_name, {}).get("recorded_ip", "N/A")
-        
         if not public_ip:
             flash("Cannot update IP: Public IP is unknown.", "danger")
             return redirect(url_for('index'))
 
-        logger.info(f"[{domain_name}] Forcing update to {public_ip}...")
         success = r53_service.update_a_record_ip(domain_name, public_ip)
-        
         if success:
             app_state['domain_states'][domain_name]['recorded_ip'] = public_ip
             app_state['domain_states'][domain_name]['last_update_time'] = get_current_time_in_tz()
             save_state()
             flash(f"Successfully forced update for {domain_name}.", "success")
-            if send_alerts:
-                notify_service.send_notification(
-                    f"DDNS IP Manually Updated for {domain_name}",
-                    f"The IP address for {domain_name} has been manually updated.\n\n"
-                    f"New IP: {public_ip}\n"
-                    f"Old IP: {old_ip}"
-                )
         else:
-            flash(f"Failed to force update for {domain_name}. Check logs.", "danger")
-            if send_alerts:
-                notify_service.send_notification(
-                    f"DDNS IP Manual Update FAILED for {domain_name}",
-                    f"A manual IP address update for {domain_name} failed. "
-                    f"Please check the application logs and IAM permissions."
-                )
-            
+            flash(f"Failed to force update for {domain_name}.", "danger")
     except Exception as e:
-        logger.error(f"Error during force IP update: {e}")
         flash(f"An error occurred: {e}", "danger")
-
     return redirect(url_for('index'))
-
-@app.route('/logs/<domain_name>')
-def view_log(domain_name):
-    """
-    Renders a page to view logs for a specific domain.
-    """
-    # --- Show fake log in demo mode ---
-    if IS_DEMO_MODE:
-        logger.info(f"Demo Mode: Showing fake log for [{domain_name}]")
-        
-        # --- Determine a fake parent domain for SSL logs ---
-        fake_parent = "example.com"
-        if '.' in domain_name:
-            parts = domain_name.split('.')
-            if len(parts) > 2:
-                fake_parent = ".".join(parts[1:])
-            else:
-                fake_parent = domain_name
-
-        log_content = (
-            f"--- DEMO MODE: Showing fake logs for [{domain_name}] ---\n\n"
-            f"2025-11-15 19:30:00 - INFO - [{domain_name}] IPs match (1.23.45.67). No update needed.\n"
-            f"2025-11-15 19:25:00 - INFO - [{domain_name}] IPs match (1.23.45.67). No update needed.\n"
-            f"2025-11-15 19:20:00 - INFO - [{domain_name}] IPs match (1.23.45.67). No update needed.\n"
-            f"2025-11-15 19:15:00 - INFO - [{domain_name}] IP mismatch. Recorded: 8.8.8.8, Public: 1.23.45.67.\n"
-            f"2025-11-15 19:15:00 - INFO - [{domain_name}] Auto-update enabled. Updating...\n"
-            f"2025-11-15 19:15:01 - INFO - [{domain_name}] Successfully updated to 1.23.45.67\n"
-            f"2025-11-15 07:30:00 - INFO - [{fake_parent}] Checking for SSL renewal (Auto-update: True)...\n"
-            f"2025-11-15 07:30:02 - INFO - [{fake_parent}] Certbot renewal check completed. Output: Certificate not due for renewal.\n"
-            f"2025-11-15 07:30:02 - INFO - [{fake_parent}] Re-checking SSL expiration date after renewal.\n"
-        )
-        return render_template('view_log.html', log_content=log_content, domain_name=domain_name)
-
-    log_content = ""
-    filter_key = f"[{domain_name}]"
-    
-    try:
-        filtered_lines = deque(maxlen=1000)
-        with open(LOG_FILE, 'r') as f:
-            for line in f:
-                if filter_key in line:
-                    filtered_lines.append(line)
-        
-        log_content = "".join(list(filtered_lines)[::-1])
-        
-        if not log_content:
-            log_content = f"No log entries found for '{domain_name}'.\n(Note: General app logs are not shown here.)"
-            
-        return render_template('view_log.html', log_content=log_content, domain_name=domain_name)
-    except FileNotFoundError:
-        logger.error(f"Log file not found at {LOG_FILE}")
-        flash(f"Log file not found. Has the container just started?", "warning")
-        return redirect(url_for('index'))
-    except Exception as e:
-        logger.error(f"Error reading log file: {e}")
-        flash(f"An error occurred while reading the log file: {e}", "danger")
-        return redirect(url_for('index'))

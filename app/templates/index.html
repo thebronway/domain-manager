@@ -16,23 +16,29 @@
         </div>
         <div class="top-bar-right">
             
-            <div class="actions-dropdown" tabindex="0">
-                <button class="actions-dropdown-button" {{ 'disabled' if demo_mode }}>Actions ▼</button>
-                <div class="actions-dropdown-content">
+            <button id="global-reset-btn" class="btn btn-success" style="display: none; align-items: center; gap: 5px;" onclick="resetTableState()">
+                <svg width="14" height="14" style="stroke: white;"><use href="#icon-refresh"></use></svg>
+                Reset Table
+            </button>
+
+            <a href="{{ url_for('view_all_logs') }}" class="btn btn-secondary">View All Logs</a>
+
+            <div class="actions-dropdown" id="bulk-actions-dropdown">
+                <button class="actions-dropdown-button" id="bulk-actions-btn" {{ 'disabled' if demo_mode }}>Bulk Actions ▼</button>
+                <div class="actions-dropdown-content" id="bulk-actions-content">
                     <form action="{{ url_for('trigger_ddns') }}" method="POST">
                         <button type="submit">Check & Update All IPs</button>
                     </form>
                     <form action="{{ url_for('trigger_ssl') }}" method="POST">
                         <button type="submit">Check & Renew All Certs</button>
                     </form>
-                    <form action="{{ url_for('trigger_test_notification') }}" method="POST">
-                        <button type="submit">Send Test Notification</button>
-                    </form>
-                    <button type="button" id="reset-sort-btn" onclick="location.reload()">Reset Table Sort</button>
                 </div>
             </div>
             
-            <!-- Theme toggle button -->
+            <a href="{{ url_for('settings') }}" class="theme-button" title="Settings">
+                <svg width="20" height="20"><use href="#icon-settings"></use></svg>
+            </a>
+
             <button id="theme-toggle" class="theme-button" title="Toggle dark/light mode"></button>
             
         </div>
@@ -89,6 +95,18 @@
                 btn.innerText = "Show Summary ▼";
             }
         }
+
+        function showLoadingOverlay(isDemo) {
+            if (isDemo) return;
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        function resetTableState() {
+            // Clear any sort state saved in local storage (implemented in app.js)
+            localStorage.removeItem('domainTableSort');
+            // Reload page to reset view
+            window.location.href = "{{ url_for('index') }}";
+        }
     </script>
 
     <table class="domain-table">
@@ -103,7 +121,6 @@
         <tbody>
             {% if domain_configs %}
                 {% for domain_config in domain_configs %}
-                    <!-- Setup helper variables -->
                     {% set domain_name = domain_config.name %}
                     {% set state = app_state.domain_states.get(domain_name, {}) %}
                     {% set ddns_enabled = domain_config.get('ddns', false) %}
@@ -117,7 +134,6 @@
                             <span class="mobile-expand-icon">►</span>
                         </td>
                         
-                        <!-- DDNS Status Column -->
                         <td data-label="DDNS Status">
                             {% if ddns_enabled %}
                                 {% set public_ip = app_state.public_ip %}
@@ -141,7 +157,6 @@
                             {% endif %}
                         </td>
                         
-                        <!-- SSL Expiration Column -->
                         <td data-label="SSL Expiration">
                             {% if ssl_enabled and state.get('ssl_expiration') %}
                                 {{ state.ssl_expiration.strftime('%Y-%m-%d') }}
@@ -152,13 +167,11 @@
                             {% endif %}
                         </td>
                         
-                        <!-- Log Button Column -->
                         <td data-label="Logs">
-                            <a href="{{ url_for('view_log', domain_name=domain_name) }}" target="_blank" class="btn btn-secondary btn-sm">View Logs</a>
+                            <a href="{{ url_for('view_log', domain_name=domain_name) }}" class="btn btn-secondary btn-sm">View Logs</a>
                         </td>
                     </tr>
                     
-                    <!-- Expandable Row (No data-labels needed here) -->
                     <tr class="expandable-content" id="details-{{ loop.index }}">
                         <td colspan="4">
                             <div class="details-grid">
@@ -224,20 +237,10 @@
             {% else %}
                 <tr>
                     <td colspan="4" style="text-align: center; padding: 30px;">
-                        No domains are configured in /config/config.yml
+                        No domains configured. Go to <a href="{{ url_for('settings') }}">Settings</a> to add one.
                     </td>
                 </tr>
             {% endif %}
         </tbody>
     </table>
-
-    <script>
-        function showLoadingOverlay(isDemo) {
-            // Do not show the overlay in demo mode
-            if (isDemo) {
-                return;
-            }
-            document.getElementById('loading-overlay').style.display = 'flex';
-        }
-    </script>
 {% endblock %}

@@ -1,34 +1,83 @@
 {% extends "_layout.html" %}
 
-{% block title %}Logs for {{ domain_name }} - Domain Manager{% endblock %}
+{% block title %}{{ title }} - Domain Manager{% endblock %}
 
 {% block head %}
 <style>
+    /* Log Page Specific Styles */
+    .log-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
     .log-container {
-        background-color: var(--bg-color);
+        background-color: #1e1e1e; /* Always dark for logs */
         border: 1px solid var(--border-color);
         border-radius: 4px;
         padding: 15px;
         font-family: "Courier New", Courier, monospace;
-        font-size: 14px;
-        white-space: pre-wrap; /* Wrap long lines */
+        font-size: 13px;
+        line-height: 1.5;
+        white-space: pre-wrap; 
         word-break: break-all;
-        height: 60vh;
+        height: 70vh;
         overflow-y: auto;
-        color: var(--text-color);
+        color: #d4d4d4; /* Default light grey text */
+    }
+
+    /* Syntax Highlighting Classes */
+    .log-error {
+        background-color: rgba(220, 53, 69, 0.2);
+        color: #ff6b6b;
+        border-left: 3px solid #dc3545;
+        padding-left: 5px;
+        margin-left: -5px; /* Offset padding */
+    }
+    
+    .log-warning {
+        color: #ffc107;
+    }
+    
+    .log-success {
+        color: #28a745;
+    }
+    
+    /* Ensure each line is a block so bg colors span width */
+    .log-line {
+        display: block; 
+        min-height: 1.2em;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-    <h2>Logs for [{{ domain_name }}]</h2>
-    <p>Showing the last 1000 matching entries from <code>/logs/domain-manager.log</code> (newest first).</p>
+    <div class="log-header">
+        <h2>{{ title }}</h2>
+        
+        <div style="display: flex; gap: 10px;">
+            {% if download_endpoint %}
+            <a href="{{ url_for(download_endpoint) }}" class="btn btn-secondary" style="display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16"><use href="#icon-download"></use></svg>
+                Download Full Log
+            </a>
+            {% endif %}
+            
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <p>Showing the last 1000 matching entries (Newest First).</p>
+    
     <div class="log-container" id="log-box">
-{{ log_content }}
+        {% for line in log_lines %}
+            <div class="log-line {{ line.class }}">{{ line.text }}</div>
+        {% endfor %}
     </div>
 
     <script>
-        // On page load, scroll the log box to the top
+        // On page load, scroll the log box to the top (since we show newest first)
         document.addEventListener('DOMContentLoaded', (event) => {
             document.getElementById('log-box').scrollTop = 0;
         });

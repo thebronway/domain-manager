@@ -26,11 +26,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- 2. Expandable Row Logic ---
+    // --- 2. Bulk Actions Dropdown Logic ---
+    const bulkBtn = document.getElementById('bulk-actions-btn');
+    const bulkContent = document.getElementById('bulk-actions-content');
+    
+    if (bulkBtn && bulkContent) {
+        // Toggle open/close on button click
+        bulkBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent window click from immediately closing it
+            bulkContent.classList.toggle('show');
+        });
+
+        // Close if clicking anywhere outside
+        window.addEventListener('click', () => {
+            if (bulkContent.classList.contains('show')) {
+                bulkContent.classList.remove('show');
+            }
+        });
+
+        // Prevent closing if clicking inside the dropdown (e.g. on a form)
+        bulkContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+
+    // --- 3. Expandable Row Logic ---
     document.querySelectorAll('.domain-row').forEach(row => {
         row.addEventListener('click', (e) => {
-            // Don't toggle row if clicking a link or button
-            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('.btn') || e.target.closest('.sort-icon')) {
+            // Don't toggle row if clicking a link, button, or sort icon
+            if (e.target.closest('a') || e.target.closest('button') || e.target.closest('.sort-icon')) {
                 return;
             }
             
@@ -39,11 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (targetRow) {
                 if (targetRow.style.display === 'table-row') {
-                    // Collapse
                     targetRow.style.display = 'none';
                     row.classList.remove('is-open');
                 } else {
-                    // Expand
                     targetRow.style.display = 'table-row';
                     row.classList.add('is-open');
                 }
@@ -51,15 +73,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- 3. Table Sorting Logic ---
+    // --- 4. Table Sorting Logic (Persistent) ---
     const tableBody = document.querySelector('.domain-table tbody');
+    const resetBtn = document.getElementById('global-reset-btn');
     
-    // Only run sorting code if the table exists
     if (tableBody) {
         const sortIcons = document.querySelectorAll('.sort-icon');
         let currentSort = { key: 'default', direction: 'asc' };
 
-        // Function to get the value for sorting
+        // Load saved sort from LocalStorage
+        const savedSort = localStorage.getItem('domainTableSort');
+        
         function getSortValue(row, key) {
             switch (key) {
                 case 'domain-name':
@@ -69,25 +93,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'ssl-expire':
                     const text = row.querySelector('td:nth-child(3)').innerText.trim();
                     if (text.includes('-')) return text; 
-                    if (text === 'Missing') return '1000-01-01'; // Sorts Missing first
-                    return '1000-01-02'; // Sorts N/A second
-                case 'default':
+                    if (text === 'Missing') return '1000-01-01';
+                    return '1000-01-02'; // N/A
                 default:
                     return parseInt(row.dataset.defaultOrder, 10);
             }
         }
 
-        // Main sort function
-        function sortTable(sortKey) {
-            let direction = 'asc';
-            if (currentSort.key === sortKey && currentSort.direction === 'asc') {
-                direction = 'desc';
+        function sortTable(sortKey, direction = null) {
+            // Determine direction
+            if (!direction) {
+                if (currentSort.key === sortKey && currentSort.direction === 'asc') {
+                    direction = 'desc';
+                } else {
+                    direction = 'asc';
+                }
             }
             
             currentSort.key = sortKey;
             currentSort.direction = direction;
 
-            // Update icon classes
+            // Save to storage
+            localStorage.setItem('domainTableSort', JSON.stringify(currentSort));
+
+            // Show/Hide Reset Button
+            if (resetBtn) {
+                resetBtn.style.display = 'inline-flex';
+            }
+
+            // Update icons
             sortIcons.forEach(icon => {
                 icon.classList.remove('asc', 'desc');
                 if (icon.dataset.sortKey === sortKey) {
@@ -95,22 +129,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Get all row pairs
+            // Sort rows
             const rows = Array.from(tableBody.querySelectorAll('tr.domain-row'));
             const rowPairs = rows.map(row => ({
                 main: row,
-                details: row.nextElementSibling, // This is the expandable row
+                details: row.nextElementSibling,
                 sortValue: getSortValue(row, sortKey)
             }));
 
-            // Sort the pairs
             rowPairs.sort((a, b) => {
                 if (a.sortValue < b.sortValue) return direction === 'asc' ? -1 : 1;
                 if (a.sortValue > b.sortValue) return direction === 'asc' ? 1 : -1;
                 return 0;
             });
 
-            // Re-append sorted pairs to the table body
+            // Re-append
             rowPairs.forEach(pair => {
                 tableBody.appendChild(pair.main);
                 if (pair.details) {
@@ -119,12 +152,21 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Add click listeners to sort icons
+        // Add listeners
         sortIcons.forEach(icon => {
             icon.addEventListener('click', () => {
                 sortTable(icon.dataset.sortKey);
             });
         });
-    }
 
+        // Apply saved sort on load
+        if (savedSort) {
+            try {
+                const parsed = JSON.parse(savedSort);
+                sortTable(parsed.key, parsed.direction);
+            } catch(e) {
+                console.error("Error parsing saved sort", e);
+            }
+        }
+    }
 });
