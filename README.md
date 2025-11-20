@@ -4,138 +4,81 @@ A self-hosted, automated DDNS & SSL Certificate manager for AWS Route 53.
 
 This application provides a simple web dashboard to monitor and manage your domain records. It automatically updates your AWS Route 53 'A' records to match your home's dynamic public IP and uses Let's Encrypt to create and renew SSL certificates for your services.
 
-**Version:** `v0.1`
+**Version:** `v0.4`
 **GitHub:** [thebronway/domain-manager](https://github.com/thebronway/domain-manager)
 **Docker Hub:** [thebronway/domain-manager](https://hub.docker.com/r/thebronway/domain-manager)
 
 ---
+![Dashboard Screenshot](./screenshots/dashboardv0.4.png)
+---
 
 ## Features
 
-* **Dynamic DNS (DDNS):** Automatically polls for your public IP and updates specified AWS Route 53 'A' records.
-* **Automated SSL:** Automatically creates and renews Let's Encrypt SSL certificates (including wildcard domains) using the DNS-01 challenge via Route 53.
-* **Web Dashboard:** A clean UI to monitor the status of your domains, see your public IP, and check SSL expiration dates.
-* **Manual Controls:** Trigger IP updates, SSL renewals, or log lookups for individual domains from the UI.
-* **Multi-Service Notifications:** Uses `apprise` to send alerts for all events (IP changes, SSL renewals, failures) to multiple services at once (Email, Discord, Slack, Telegram, etc.).
-* **Per-Domain Toggles:** Enable or disable DDNS, SSL, auto-updates, and notifications for each domain individually.
-* **Log Management:** Automatically cleans up old Certbot logs to prevent disk fill-up.
-* **Thread-Safe State:** Uses threading locks to prevent `app_state.json` corruption.
+* **Dynamic DNS (DDNS):** Automatically checks your public IP and updates AWS Route 53 A-records if they change.
+* **SSL Management:** Wraps Certbot to handle creation and renewal of certificates using the DNS-01 challenge (perfect for Wildcards).
+* **Web Dashboard:** A clean, responsive UI to view the status of all your domains at a glance.
+* **Settings UI:** Configure everything—domains, notifications, timezones, and log retention—directly from the browser. No container restarts required!
+* **Notifications:** Get alerts via Discord, Slack, Telegram, Email (SMTP), and more when IPs update or certs renew.
+* **Mobile Friendly:** Fully responsive design that works great on your phone.
 
----
-![Dashboard Screenshot](screenshot.png)
----
+## Why I Built This
 
-## Requirements
+I needed a simple way to keep my home server's IP in sync with AWS and ensure my SSL certificates never expired, without relying on scripts. I wanted a clean UI to see exactly what was happening, when updates occurred, and to get notified if something went wrong.
 
-Before you begin, you will need:
-* A domain name registered and managed through **AWS Route 53**.
-* An **AWS Account** with an IAM user.
-* **Docker** and **Docker Compose** installed on your server.
+This project was developed with AI assistance to help build, refactor, and enhance features.
 
----
+## Important Note on SSL Certificates
 
-## Installation & Setup (Docker Compose)
+**This application is designed to manage the full lifecycle of your certificates.**
 
-This is the recommended method. It assumes you are pulling the pre-built image from Docker Hub.
+* It can **only** renew and manage certificates that it created itself.
+* It **cannot** import or manage existing certificates you generated manually or via another tool.
+* If you have existing certs, you should let this app generate new ones to ensure seamless auto-renewal.
 
-### 1. Create Your Project Directory
+## Important Note on Authentication
 
-Create a folder on your server to hold your configuration files.
+**This app does not have built-in login functionality.** You must manage your own authentication. It is strongly recommended to run this container behind a reverse proxy (like Nginx, Traefik, or Cloudflare Tunnel) and enforce Basic Auth or SSO (Authelia/Authentik) to secure the dashboard.
 
-```bash
-mkdir domain-manager
-cd domain-manager
-mkdir config
-```
+## Quick Start
 
-### 2. Create the `.env` Secrets File
+### 1. Prerequisites
+* A domain managed by **AWS Route 53**.
+* An AWS IAM User with permissions to modify Route 53.
 
-This file will store all your sensitive API keys and passwords.
-
-Create a new file named `.env` in the `domain-manager` directory:
-
-```ini
-# ----- AWS Secrets -----
-# The IAM user must have permissions for Route 53.
-# See the "IAM Permissions" section below for a policy.
-AWS_ACCESS_KEY_ID=YOUR_AWS_ACCESS_KEY
-AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_KEY
-    
-# ----- SMTP Secrets (if using) -----
-SMTP_USER=YOUR_SMTP_USERNAME
-SMTP_PASS=YOUR_SMTP_PASSWORD
-    
-# ----- Apprise URL Secrets (if using) -----
-# Get these from your notification provider.
-DISCORD_WEBHOOK_URL=[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)...
-SLACK_WEBHOOK_URL=[https://hooks.slack.com/services/](https://hooks.slack.com/services/)...
-TELEGRAM_URL=tgram://YOUR_BOT_TOKEN/YOUR_CHAT_ID
-MSTEAMS_WEBHOOK_URL=msteams://TOKEN_A/TOKEN_B/TOKEN_C
-PUSHOVER_URL=pushover://USER_KEY@API_TOKEN
-GCHAT_WEBHOOK_URL=gchat://WEBHOOK_URL
-```
-
-### 3. Create `docker-compose.yml`
-
-Create a file named `docker-compose.yml` in the `domain-manager` directory:
-
-```yaml
-version: '3.7'
-
-services:
-  domain-manager:
-    # Use the pre-built image from Docker Hub
-    image: thebronway/domain-manager:latest
-    
-    container_name: domain-manager
-    restart: unless-stopped
-
-    # Expose the web UI on port 8080
-    ports:
-      - "8080:8080"
-    
-    # Mount local directories for persistent config, certs, and logs
-    volumes:
-      - ./config:/config
-      - ./certs:/certs
-      - ./logs:/logs
-    
-    # Load all the secrets from the .env file
-    env_file:
-      - .env
-
-    # Set the timezone to match your config.yml
-    environment:
-      - TZ=America/New_York
-```
-
-### 4. Download and Edit the Configuration
-
-1.  Download the example `config.yml` from the GitHub repository into your `config` folder:
-    ```bash
-    wget -O config/config.yml [https://raw.githubusercontent.com/thebronway/domain-manager/main/app/config_example/config.yml](https://raw.githubusercontent.com/thebronway/domain-manager/main/app/config_example/config.yml)
-    ```
-    *(If you don't have `wget`, use `curl -o config/config.yml https://raw.githubusercontent.com/thebronway/domain-manager/main/app/config_example/config.yml`)*
-
-2.  **Edit the config:**
-    Open `config/config.yml` and edit it to match your needs. Add your domains, set your timezone, and enable your desired notification services.
-
-### 5. Run the Container
-
-Now that your `docker-compose.yml`, `.env`, and `config/config.yml` are all in place, run the container:
+### 2. Run with Docker
+The easiest way to get started is using Docker.
 
 ```bash
-docker-compose up -d
+docker run -d \\
+  --name domain-manager \\
+  -p 8080:8080 \\
+  -v $(pwd)/config:/config \\
+  -v $(pwd)/certs:/certs \\
+  -v $(pwd)/logs:/logs \\
+  -e AWS_ACCESS_KEY_ID="YOUR_AWS_ACCESS_KEY" \\
+  -e AWS_SECRET_ACCESS_KEY="YOUR_AWS_SECRET_KEY" \\
+  --restart unless-stopped \\
+  thebronway/domain-manager:latest
 ```
 
-The application will pull the image, start the container, and mount your configuration. Access the web dashboard at `http://<your-server-ip>:8080`.
+### 3. Configure
+1.  Open `http://localhost:8080` in your browser.
+2.  Click the **Settings** gear icon.
+3.  Add your domains, enable the features you want (DDNS, SSL, etc.), and set up notifications.
+4.  Click **Save Changes**.
 
----
+## Volumes
 
-## AWS IAM Permissions
+| Volume | Description |
+| :--- | :--- |
+| `/config` | Stores `settings.json` and application state. **Mount this to persist settings.** |
+| `/certs` | Stores Let's Encrypt certificates. **Mount this to share certs with your other containers (Nginx, Traefik, etc.).** |
+| `/logs` | Stores application logs. Useful for debugging. |
 
-Your `AWS_ACCESS_KEY_ID` must belong to an IAM user with permissions to modify Route 53.
+## Environment Variables
 
-The simplest way to grant this is to create a new IAM user and attach the **`AmazonRoute53FullAccess`** AWS-managed policy.
-
-For a more secure, least-privilege policy, you can create your own policy that limits the user's access to only your specific hosted zone.
+| Variable | Description | Required |
+| :--- | :--- | :--- |
+| `AWS_ACCESS_KEY_ID` | Your AWS Access Key. | Yes |
+| `AWS_SECRET_ACCESS_KEY` | Your AWS Secret Key. | Yes |
+| `DEMO_MODE` | Set to `true` to run with fake data (no AWS connection). | No 
