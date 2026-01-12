@@ -1,8 +1,14 @@
 {% extends "_layout.html" %}
 
-{% block title %}Dashboard - Domain Manager{% endblock %}
+{% block title %}Dashboard - domainCtrl{% endblock %}
 
 {% block content %}
+    {% if app_state.provider_error %}
+    <div style="background-color: #dc3545; color: white; padding: 15px; text-align: center; font-weight: bold; margin-bottom: 20px; border-radius: 4px; border: 1px solid #a71d2a;">
+        ⚠️ CONFIGURATION ERROR: {{ app_state.provider_error }}
+    </div>
+    {% endif %}
+
     <div id="loading-overlay">
         <div>
             <p>Creating Certificate...</p>
@@ -12,7 +18,10 @@
 
     <div class="top-bar">
         <div class="top-bar-left">
-            <h1>Domain Manager</h1>
+            <div class="brand-logo-container">
+                <img src="{{ url_for('static', filename='images/domainCtrl-logo-lightmode.png') }}" alt="domainCtrl" class="brand-logo light-mode-logo" style="height: 40px; width: auto;">
+                <img src="{{ url_for('static', filename='images/domainCtrl-logo-darkmode.png') }}" alt="domainCtrl" class="brand-logo dark-mode-logo" style="height: 40px; width: auto;">
+            </div>
         </div>
         <div class="top-bar-right">
             
@@ -114,7 +123,9 @@
             <tr>
                 <th style="width: 80%;">Domain Name <span class="sort-icon" data-sort-key="domain-name"></span></th>
                 <th>DDNS Status <span class="sort-icon" data-sort-key="ddns-status"></span></th>
+                {% if ssl_enabled %}
                 <th>SSL Expiration <span class="sort-icon" data-sort-key="ssl-expire"></span></th>
+                {% endif %}
                 <th>Logs</th>
             </tr>
         </thead>
@@ -124,7 +135,7 @@
                     {% set domain_name = domain_config.name %}
                     {% set state = app_state.domain_states.get(domain_name, {}) %}
                     {% set ddns_enabled = domain_config.get('ddns', false) %}
-                    {% set ssl_enabled = domain_config.get('ssl', {}).get('enabled', false) %}
+                    {% set domain_ssl_enabled = domain_config.get('ssl', {}).get('enabled', false) %}
                     {% set notifications_enabled = domain_config.get('notifications', true) %}
                     {% set auto_update_enabled = domain_config.get('auto_update', true) %}
                     
@@ -157,15 +168,17 @@
                             {% endif %}
                         </td>
                         
+                        {% if ssl_enabled %}
                         <td data-label="SSL Expiration">
-                            {% if ssl_enabled and state.get('ssl_expiration') %}
+                            {% if domain_ssl_enabled and state.get('ssl_expiration') %}
                                 {{ state.ssl_expiration.strftime('%Y-%m-%d') }}
-                            {% elif ssl_enabled %}
+                            {% elif domain_ssl_enabled %}
                                 <span class="status-indicator status-mismatch">Missing</span>
                             {% else %}
-                                <span class="status-indicator status-na">N/A</span>
+                                <span class="status-indicator status-na">Disabled</span>
                             {% endif %}
                         </td>
+                        {% endif %}
                         
                         <td data-label="Logs">
                             <a href="{{ url_for('view_log', domain_name=domain_name) }}" class="btn btn-secondary btn-sm">View Logs</a>
@@ -173,7 +186,7 @@
                     </tr>
                     
                     <tr class="expandable-content" id="details-{{ loop.index }}">
-                        <td colspan="4">
+                        <td colspan="{{ 4 if ssl_enabled else 3 }}">
                             <div class="details-grid">
                                 
                                 {% if ddns_enabled %}
@@ -189,7 +202,7 @@
                                     <div><strong>DDNS Last Update:</strong> {{ state.get('last_update_time').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('last_update_time') else 'N/A' }}</div>
                                 {% endif %}
 
-                                {% if ssl_enabled %}
+                                {% if ssl_enabled and domain_ssl_enabled %}
                                     <div><strong>SSL Last Renew:</strong> {{ state.get('ssl_last_renew').strftime('%Y-%m-%d %H:%M:%S %Z') if state.get('ssl_last_renew') else 'N/A' }}</div>
                                 {% endif %}
 
@@ -216,7 +229,7 @@
                                 </form>
                                 {% endif %}
                                 
-                                {% if ssl_enabled %}
+                                {% if ssl_enabled and domain_ssl_enabled %}
                                     {% if state.get('ssl_expiration') %}
                                         <form action="{{ url_for('trigger_ssl') }}" method="POST" style="display: inline;">
                                             <button type="submit" class="btn btn-secondary" {{ 'disabled' if demo_mode }}>Renew Cert Manually</button>
@@ -236,7 +249,7 @@
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="4" style="text-align: center; padding: 30px;">
+                    <td colspan="{{ 4 if ssl_enabled else 3 }}" style="text-align: center; padding: 30px;">
                         No domains configured. Go to <a href="{{ url_for('settings') }}">Settings</a> to add one.
                     </td>
                 </tr>

@@ -17,6 +17,7 @@
     <div class="tabs">
         <button class="tab-link active" onclick="openTab(event, 'tab-general')">General</button>
         <button class="tab-link" onclick="openTab(event, 'tab-domains')">Domains</button>
+        <button class="tab-link" onclick="openTab(event, 'tab-certificates')">Certificates</button>
         <button class="tab-link" onclick="openTab(event, 'tab-notifications')">Notifications</button>
     </div>
 
@@ -60,27 +61,78 @@
         </div>
 
         <div id="tab-domains" class="tab-content">
+            
+            {% if provider %}
+                <div class="provider-status-box {{ 'error' if provider_error else 'ok' }}">
+                    <strong>Provider:</strong> {{ provider|upper }}
+                    {% if provider_error %}
+                        <div style="margin-top: 5px;">❌ <strong>Error:</strong> {{ provider_error }}</div>
+                    {% else %}
+                        <div style="margin-top: 5px;">✅ Credentials Configured</div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
             <div class="help-text mb-15">
-                Configure the domains you want to manage.<br>
-                <strong>DDNS:</strong> Updates Route53 A-records.<br>
-                <strong>SSL:</strong> Manages Let's Encrypt certs (Wildcard requires DNS-01 challenge).
+                Configure the domains you want to manage.
             </div>
             
             <table class="settings-table" id="domains-table">
                 <thead>
                     <tr>
-                        <th style="width: 30%;">Domain Name</th>
-                        <th class="text-center" style="width: 15%;">Manage DDNS</th>
-                        <th class="text-center" colspan="2" style="width: 30%;">SSL</th>
-                        <th class="text-center" style="width: 10%;">Notifications</th>
-                        <th class="text-center" style="width: 10%;">Auto-Update</th>
+                        <th style="width: 25%;">
+                            Domain Name
+                        </th>
+                        <th class="text-center" style="width: 10%;">
+                            DDNS
+                            <span class="tooltip">(?)
+                                <span class="tooltip-text">
+                                    <strong>Enabled:</strong> Updates Proivder <strong>A Record</strong> when public IP changes.<br>
+                                    <strong>Disabled:</strong> Only detects and alerts on IP mismatches and makes no changes.
+                                </span>
+                            </span>
+                        </th>
+                        <th class="text-center" colspan="2" style="width: 20%;">SSL</th>
+                        <th class="text-center" style="width: 25%;">
+                            Notification Services
+                            <span class="tooltip">(?)
+                                <span class="tooltip-text">
+                                    Select which services (SMTP, Discord, etc.) receive alerts specifically for this domain.
+                                </span>
+                            </span>
+                        </th>
+                        <th class="text-center" style="width: 10%;">
+                            Auto-Update
+                            <span class="tooltip">(?)
+                                <span class="tooltip-text">
+                                    <strong>Enabled:</strong> Automatically performs IP updates and real Cert renewals.<br>
+                                    <strong>Disabled:</strong> Only alerts on issues and makes no changes.
+                                </span>
+                            </span>
+                        </th>
                         <th class="text-center" style="width: 5%;">Delete</th>
                     </tr>
                     <tr class="sub-header-row">
                         <th></th>
                         <th></th>
-                        <th class="text-center">Manage Certs</th>
-                        <th class="text-center">Enable Wildcard</th>
+                        <th class="text-center">
+                            Enable
+                            <span class="tooltip">(?)
+                                <span class="tooltip-text">
+                                    <strong>Enabled:</strong> Monitors and renews certificates.<br>
+                                    <strong>Disabled:</strong> Hides SSL status for this domain completely.
+                                </span>
+                            </span>
+                        </th>
+                        <th class="text-center">
+                            Wildcard
+                            <span class="tooltip">(?)
+                                <span class="tooltip-text">
+                                    Requests a wildcard certificate (*.domain.com).<br>
+                                    Requires DNS-01 challenge (handled automatically via Provider).
+                                </span>
+                            </span>
+                        </th>
                         <th></th>
                         <th></th>
                         <th></th>
@@ -90,37 +142,44 @@
                     {% for domain in settings.domains %}
                     <tr class="domain-input-row">
                         <td data-label="Domain Name">
-                            <input type="text" class="form-control domain-name" value="{{ domain.name }}" placeholder="example.com" required>
+                            <input type="text" class="form-control domain-name" value="{{ domain.name }}" required>
                         </td>
                         <td class="text-center" data-label="Manage DDNS">
-                            <label class="switch">
-                                <input type="checkbox" class="domain-ddns" {{ 'checked' if domain.ddns }}>
-                                <span class="slider round"></span>
-                            </label>
+                            <label class="switch"><input type="checkbox" class="domain-ddns" {{ 'checked' if domain.ddns }}><span class="slider round"></span></label>
                         </td>
-                        <td class="text-center" data-label="Manage Certs">
-                            <label class="switch">
-                                <input type="checkbox" class="domain-ssl-enabled" {{ 'checked' if domain.ssl.enabled }}>
-                                <span class="slider round"></span>
-                            </label>
+                        <td class="text-center" data-label="SSL Enabled">
+                            <label class="switch"><input type="checkbox" class="domain-ssl-enabled" {{ 'checked' if domain.ssl.enabled }}><span class="slider round"></span></label>
                         </td>
-                        <td class="text-center" data-label="Enable Wildcard">
-                            <label class="switch">
-                                <input type="checkbox" class="domain-ssl-wildcard" {{ 'checked' if domain.ssl.wildcard }}>
-                                <span class="slider round"></span>
-                            </label>
+                        <td class="text-center" data-label="SSL Wildcard">
+                            <label class="switch"><input type="checkbox" class="domain-ssl-wildcard" {{ 'checked' if domain.ssl.wildcard }}><span class="slider round"></span></label>
                         </td>
                         <td class="text-center" data-label="Notifications">
-                            <label class="switch">
-                                <input type="checkbox" class="domain-notify" {{ 'checked' if domain.notifications }}>
-                                <span class="slider round"></span>
-                            </label>
+                            <div class="multi-select-container">
+                                <button type="button" class="multi-select-btn" onclick="toggleMultiSelect(this)">
+                                    <span>Select Services</span>
+                                </button>
+                                <div class="multi-select-dropdown">
+                                    <div class="multi-select-actions">
+                                        <button type="button" class="btn-link-sm" onclick="toggleAllNotifications(this, true)">Check All</button>
+                                        <button type="button" class="btn-link-sm" onclick="toggleAllNotifications(this, false)">Uncheck All</button>
+                                    </div>
+
+                                    {% set enabled_services = domain.notifications if domain.notifications is iterable and domain.notifications is not string else [] %}
+                                    {% if domain.notifications == true %}
+                                        {% set enabled_services = ['smtp', 'discord', 'slack', 'telegram', 'msteams', 'pushover', 'gchat'] %}
+                                    {% endif %}
+
+                                    {% for svc in ['smtp', 'discord', 'slack', 'telegram', 'msteams', 'pushover', 'gchat'] %}
+                                        <label class="multi-select-item">
+                                            <input type="checkbox" class="notif-svc-{{ svc }}" value="{{ svc }}" {{ 'checked' if svc in enabled_services }}>
+                                            <span>{{ svc|upper }}</span>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
                         </td>
                         <td class="text-center" data-label="Auto-Update">
-                            <label class="switch">
-                                <input type="checkbox" class="domain-autoupd" {{ 'checked' if domain.auto_update }}>
-                                <span class="slider round"></span>
-                            </label>
+                            <label class="switch"><input type="checkbox" class="domain-autoupd" {{ 'checked' if domain.auto_update }}><span class="slider round"></span></label>
                         </td>
                         <td class="text-center" data-label="Delete">
                             <button type="button" class="btn-icon-danger" onclick="removeRow(this)">✕</button>
@@ -130,6 +189,30 @@
                 </tbody>
             </table>
             <button type="button" class="btn btn-secondary mt-15" onclick="addDomainRow()">+ Add Domain</button>
+        </div>
+
+        <div id="tab-certificates" class="tab-content">
+            <div class="form-group row-align">
+                <label class="switch">
+                    <input type="checkbox" id="cert-global-enabled" {{ 'checked' if settings.get('cert_management', {}).get('enabled', True) }}>
+                    <span class="slider round"></span>
+                </label>
+                <span class="label-text"><strong>Enable Global Certificate Management</strong></span>
+            </div>
+            
+            <div class="help-text">
+                If disabled, SSL columns will be hidden from the dashboard and no renewal checks will run.
+            </div>
+            <hr>
+
+            <div class="form-group">
+                <label for="cert-check-time">Daily Renewal Check Time</label>
+                <div class="help-text">
+                    Time (in your local timezone) to run the 'certbot renew' check.
+                </div>
+                <input type="time" id="cert-check-time" class="form-control" style="max-width: 150px;" 
+                       value="{{ settings.get('cert_management', {}).get('check_time', '02:30') }}">
+            </div>
         </div>
 
         <div id="tab-notifications" class="tab-content">
@@ -154,7 +237,6 @@
                     </div>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="saveAndTest('smtp')">Save & Test</button>
                 </div>
-                
                 <div class="grid-2">
                     <div class="form-group">
                         <label>Host</label>
@@ -175,7 +257,6 @@
                         <input type="text" id="smtp-to" class="form-control" value="{{ settings.notifications.smtp.to_email }}">
                     </div>
                 </div>
-                
                 <div class="grid-2">
                     <div class="form-group">
                         <label>Username</label>
@@ -229,14 +310,30 @@
         <td class="text-center" data-label="Manage DDNS">
             <label class="switch"><input type="checkbox" class="domain-ddns" checked><span class="slider round"></span></label>
         </td>
-        <td class="text-center" data-label="Manage Certs">
+        <td class="text-center" data-label="SSL Enabled">
             <label class="switch"><input type="checkbox" class="domain-ssl-enabled" checked><span class="slider round"></span></label>
         </td>
-        <td class="text-center" data-label="Enable Wildcard">
+        <td class="text-center" data-label="SSL Wildcard">
             <label class="switch"><input type="checkbox" class="domain-ssl-wildcard"><span class="slider round"></span></label>
         </td>
         <td class="text-center" data-label="Notifications">
-            <label class="switch"><input type="checkbox" class="domain-notify" checked><span class="slider round"></span></label>
+            <div class="multi-select-container">
+                <button type="button" class="multi-select-btn" onclick="toggleMultiSelect(this)">
+                    <span>Select Services</span>
+                </button>
+                <div class="multi-select-dropdown">
+                    <div class="multi-select-actions">
+                        <button type="button" class="btn-link-sm" onclick="toggleAllNotifications(this, true)">Check All</button>
+                        <button type="button" class="btn-link-sm" onclick="toggleAllNotifications(this, false)">Uncheck All</button>
+                    </div>
+                    {% for svc in ['smtp', 'discord', 'slack', 'telegram', 'msteams', 'pushover', 'gchat'] %}
+                        <label class="multi-select-item">
+                            <input type="checkbox" class="notif-svc-{{ svc }}" value="{{ svc }}">
+                            <span>{{ svc|upper }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
         </td>
         <td class="text-center" data-label="Auto-Update">
             <label class="switch"><input type="checkbox" class="domain-autoupd" checked><span class="slider round"></span></label>
@@ -248,6 +345,21 @@
 </template>
 
 <script>
+    // --- Unsaved Changes Logic ---
+    let isDirty = false;
+    const form = document.getElementById('settings-form');
+
+    form.addEventListener('change', () => { isDirty = true; });
+    form.addEventListener('input', () => { isDirty = true; });
+
+    window.addEventListener('beforeunload', (e) => {
+        if (isDirty) {
+            e.preventDefault();
+            e.returnValue = ''; 
+        }
+    });
+
+    // --- Tab Logic ---
     function openTab(evt, tabName) {
         var i, tabcontent, tablinks;
         tabcontent = document.getElementsByClassName("tab-content");
@@ -259,19 +371,89 @@
         evt.currentTarget.classList.add("active");
     }
 
+    // --- Domain Row Logic ---
     function addDomainRow() {
         const template = document.getElementById('domain-row-template');
         const clone = template.content.cloneNode(true);
-        document.getElementById('domain-rows').appendChild(clone);
+        const newRow = document.getElementById('domain-rows').appendChild(clone);
+        
+        // Initialize the label for the new row (it will say 'None')
+        // Note: appendChild returns a DocumentFragment, we need the last child of parent
+        const actualRow = document.getElementById('domain-rows').lastElementChild;
+        const dropdown = actualRow.querySelector('.multi-select-dropdown');
+        updateMultiSelectLabel(dropdown);
+        
+        isDirty = true;
     }
-    function removeRow(btn) { btn.closest('tr').remove(); }
+    function removeRow(btn) { 
+        btn.closest('tr').remove(); 
+        isDirty = true;
+    }
 
-    // --- Gather Form Data Helper ---
+    // --- Multi-Select Logic ---
+    function toggleMultiSelect(btn) {
+        document.querySelectorAll('.multi-select-dropdown').forEach(d => {
+            if(d !== btn.nextElementSibling) d.classList.remove('show');
+        });
+        btn.nextElementSibling.classList.toggle('show');
+    }
+
+    // Toggle All / None
+    function toggleAllNotifications(btn, state) {
+        const dropdown = btn.closest('.multi-select-dropdown');
+        dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = state;
+        });
+        updateMultiSelectLabel(dropdown);
+        isDirty = true;
+    }
+
+    // Update Label (e.g. "SMTP, Discord")
+    function updateMultiSelectLabel(dropdown) {
+        const btn = dropdown.previousElementSibling; // The button
+        const span = btn.querySelector('span');
+        const checked = dropdown.querySelectorAll('input[type="checkbox"]:checked');
+        
+        if (checked.length === 0) {
+            span.innerText = "Select Services"; // Or "None"
+            span.style.color = "var(--text-color-light)";
+        } else {
+            const labels = Array.from(checked).map(cb => cb.nextElementSibling.innerText);
+            span.innerText = labels.join(', ');
+            span.style.color = "var(--text-color)";
+        }
+    }
+
+    // Event Delegation for Checkbox Changes (Updates label in real-time)
+    document.addEventListener('change', (e) => {
+        if (e.target.closest('.multi-select-dropdown')) {
+            updateMultiSelectLabel(e.target.closest('.multi-select-dropdown'));
+        }
+    });
+
+    // Close on outside click
+    window.addEventListener('click', (e) => {
+        if (!e.target.matches('.multi-select-btn') && !e.target.closest('.multi-select-btn') && !e.target.closest('.multi-select-dropdown')) {
+            document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('show'));
+        }
+    });
+
+    // Init labels on load
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.multi-select-dropdown').forEach(updateMultiSelectLabel);
+    });
+
+    // --- Data Gathering ---
     function getSettingsData() {
         const domains = [];
         document.querySelectorAll('.domain-input-row').forEach(row => {
             const name = row.querySelector('.domain-name').value.trim();
             if(name) {
+                const selectedServices = [];
+                row.querySelectorAll('.multi-select-dropdown input[type="checkbox"]:checked').forEach(cb => {
+                    selectedServices.push(cb.value);
+                });
+
                 domains.push({
                     name: name,
                     ddns: row.querySelector('.domain-ddns').checked,
@@ -279,7 +461,7 @@
                         enabled: row.querySelector('.domain-ssl-enabled').checked,
                         wildcard: row.querySelector('.domain-ssl-wildcard').checked
                     },
-                    notifications: row.querySelector('.domain-notify').checked,
+                    notifications: selectedServices, 
                     auto_update: row.querySelector('.domain-autoupd').checked
                 });
             }
@@ -293,7 +475,6 @@
                 port: parseInt(document.getElementById('smtp-port').value) || 587,
                 from_email: document.getElementById('smtp-from').value.trim(),
                 to_email: document.getElementById('smtp-to').value.trim(),
-                // Added Credentials
                 user: document.getElementById('smtp-user').value.trim(),
                 pass: document.getElementById('smtp-pass').value.trim()
             }
@@ -310,6 +491,10 @@
             timezone: document.getElementById('timezone').value,
             ip_check_interval: document.getElementById('ip_check_interval').value,
             log_retention: document.getElementById('log_retention').value,
+            cert_management: {
+                enabled: document.getElementById('cert-global-enabled').checked,
+                check_time: document.getElementById('cert-check-time').value
+            },
             domains: domains,
             notifications: notifications
         };
@@ -322,7 +507,6 @@
         btn.innerText = "Saving...";
         btn.disabled = true;
 
-        // 1. SAVE First
         try {
             const settingsData = getSettingsData();
             const saveRes = await fetch("{{ url_for('settings') }}", {
@@ -338,8 +522,8 @@
                 btn.disabled = false;
                 return;
             }
+            isDirty = false;
 
-            // 2. TEST Second (Now that backend has data)
             btn.innerText = "Testing...";
             let testUrl, testBody;
 
@@ -392,6 +576,7 @@
             const result = await response.json();
             
             if(result.status === 'success') {
+                isDirty = false; 
                 alert("Settings Saved Successfully!");
                 window.location.reload();
             } else {

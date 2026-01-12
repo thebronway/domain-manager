@@ -30,8 +30,7 @@ def get_next_run_time(job_func_name):
     """
     Finds the EARLIEST next run time for a scheduled job by its function name.
     """
-    IS_DEMO_MODE = config.get('demo_mode', False)
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         if job_func_name == "run_ddns_update":
             return "Every 5 Mins (Demo)"
         if job_func_name == "run_ssl_check":
@@ -61,16 +60,12 @@ def get_next_run_time(job_func_name):
         return "Error"
 
 def _generate_fake_state(domain_configs):
-    """Builds a fake app_state dict with random data."""
-    logger.info("Demo Mode: Generating fake state for dashboard.")
-    fake_public_ip = f"1.{random.randint(10,99)}.{random.randint(10,99)}.{random.randint(10,99)}"
-    
-    ips_to_use = [
-        fake_public_ip,
-        fake_public_ip,
-        f"2.{random.randint(10,99)}.{random.randint(10,99)}.{random.randint(10,99)}",
-        "ALIAS: my-alb-12345.us-east-1.elb.amazonaws.com."
-    ]
+    """
+    Builds a fake app_state dict based on the ACTUAL current domain_configs.
+    Randomizes statuses with a positive bias (mostly green).
+    """
+    # Generate a random "Current Public IP"
+    fake_public_ip = f"{random.randint(11, 199)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
     
     tz = get_user_timezone()
     now = datetime.now(tz)
@@ -78,21 +73,46 @@ def _generate_fake_state(domain_configs):
     fake_state = {
         "public_ip": fake_public_ip, 
         "last_ip_check_time": now,
-        "domain_states": {}
+        "domain_states": {},
+        "provider_error": None # No config errors in demo mode
     }
 
     for d in domain_configs:
         domain_name = d['name']
+        ddns_enabled = d.get('ddns', False)
+        ssl_enabled = d.get('ssl', {}).get('enabled', False)
+        
+        # 1. Generate Recorded IP (DDNS)
+        recorded_ip = None
+        if ddns_enabled:
+            # 90% chance to match, 10% chance to be different
+            if random.random() > 0.1:
+                recorded_ip = fake_public_ip
+            else:
+                recorded_ip = f"{random.randint(11, 199)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
+        
+        # 2. Generate SSL Expiration
         ssl_exp = None
-        if random.choice([True, True, False]):
-             ssl_exp = now + timedelta(days=random.randint(5, 85))
-             
+        if ssl_enabled:
+            # 90% chance to be valid (future), 10% chance to be expired/missing
+            if random.random() > 0.1:
+                # Valid: Expires in 30 to 90 days
+                days_future = random.randint(30, 90)
+                ssl_exp = now + timedelta(days=days_future)
+            else:
+                # Issue: Expires in -5 days (expired) or None (missing)
+                if random.choice([True, False]):
+                    ssl_exp = now - timedelta(days=random.randint(1, 10)) # Expired
+                else:
+                    ssl_exp = None # Missing
+
         fake_state['domain_states'][domain_name] = {
-            'recorded_ip': random.choice(ips_to_use),
+            'recorded_ip': recorded_ip,
             'ssl_expiration': ssl_exp,
-            'last_update_time': now - timedelta(hours=random.randint(1, 48)),
-            'ssl_last_renew': now - timedelta(days=random.randint(1, 30))
+            'last_update_time': now - timedelta(minutes=random.randint(5, 60)),
+            'ssl_last_renew': now - timedelta(days=random.randint(1, 60))
         }
+        
     return fake_state
 
 def _parse_log_lines(lines):
@@ -125,11 +145,13 @@ def _parse_log_lines(lines):
 
 @app.route('/')
 def index():
-    IS_DEMO_MODE = config.get('demo_mode', False)
     try:
         domain_configs = config.get_domains()
         
-        if IS_DEMO_MODE:
+        # Check global SSL setting
+        ssl_globally_enabled = config.get('cert_management', {}).get('enabled', True)
+        
+        if config.demo_mode:
             dashboard_state = _generate_fake_state(domain_configs)
             next_ddns_run = "Every 5 Mins (Demo)"
             next_ssl_run = "02:30 Daily (Demo)"
@@ -162,7 +184,8 @@ def index():
                 elif rec and not rec.startswith('ALIAS'):
                      summary['ip_mismatch'] += 1
             
-            if d.get('ssl', {}).get('enabled', False):
+            # Use global toggle AND domain toggle
+            if ssl_globally_enabled and d.get('ssl', {}).get('enabled', False):
                 summary['ssl_total_enabled'] += 1
                 exp = d_state.get('ssl_expiration')
                 if exp:
@@ -185,7 +208,8 @@ def index():
                                next_ddns_run=next_ddns_run,
                                next_ssl_run=next_ssl_run,
                                summary=summary,
-                               demo_mode=IS_DEMO_MODE)
+                               demo_mode=config.demo_mode,
+                               ssl_enabled=ssl_globally_enabled) # <-- This is the key addition
     except Exception as e:
         logger.error(f"Error rendering dashboard: {e}")
         flash(f"An error occurred while loading the dashboard: {e}", "danger")
@@ -193,14 +217,13 @@ def index():
                                 app_state={"public_ip": "Error", "domain_states": {}}, 
                                 domain_configs=[], 
                                 next_ddns_run="Error", next_ssl_run="Error",
-                                summary={}, demo_mode=IS_DEMO_MODE)
+                                summary={}, demo_mode=config.demo_mode,
+                                ssl_enabled=True)
 
 # --- Settings Routes ---
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
-    IS_DEMO_MODE = config.get('demo_mode', False)
-
     if request.method == 'POST':
         try:
             new_settings = request.json
@@ -210,6 +233,10 @@ def settings():
             success = config.save(new_settings)
             
             if success:
+                # Reload the scheduler in this process (Web)
+                from app.scheduler import reload_scheduler
+                reload_scheduler()
+                
                 flash("Settings saved successfully.", "success")
                 return jsonify({"status": "success", "message": "Settings saved."})
             else:
@@ -218,16 +245,19 @@ def settings():
             logger.error(f"Error saving settings: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
-    return render_template('settings.html', settings=config.settings, demo_mode=IS_DEMO_MODE)
+    return render_template('settings.html', 
+                           settings=config.settings, 
+                           demo_mode=config.demo_mode,
+                           provider=config.provider,
+                           provider_error=app_state.get('provider_error'))
 
 # --- Log Routes ---
 
 @app.route('/logs/all')
 def view_all_logs():
     """Shows full system logs, including rotated backups."""
-    IS_DEMO_MODE = config.get('demo_mode', False)
     
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         fake_logs = [
             f"2025-11-19 10:00:00 - INFO - System started in DEMO MODE.",
             f"2025-11-19 10:05:00 - INFO - Checking public IP...",
@@ -263,7 +293,7 @@ def view_all_logs():
         
         return render_template('view_log.html', 
                              log_lines=_parse_log_lines(lines_list), 
-                             title="System Logs",
+                             title="System Logs - domainCtrl",
                              download_endpoint="download_main_log")
     except Exception as e:
         flash(f"Error reading logs: {e}", "danger")
@@ -272,8 +302,7 @@ def view_all_logs():
 @app.route('/logs/<domain_name>')
 def view_log(domain_name):
     """Renders logs for a specific domain, scanning ALL files."""
-    IS_DEMO_MODE = config.get('demo_mode', False)
-    if IS_DEMO_MODE:
+    if config.demo_mode:
          return render_template('view_log.html', log_lines=[], title=f"Demo Logs: {domain_name}", download_endpoint="download_main_log")
 
     filter_key = f"[{domain_name}]"
@@ -308,7 +337,7 @@ def view_log(domain_name):
             
         return render_template('view_log.html', 
                              log_lines=_parse_log_lines(lines_list), 
-                             title=f"Logs: {domain_name}",
+                             title=f"Logs: {domain_name} - domainCtrl",
                              download_endpoint="download_main_log")
                              
     except Exception as e:
@@ -334,8 +363,7 @@ def download_main_log():
 
 @app.route('/api/trigger/ddns', methods=['POST'])
 def trigger_ddns():
-    IS_DEMO_MODE = config.get('demo_mode', False)
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
     try:
@@ -347,8 +375,7 @@ def trigger_ddns():
 
 @app.route('/api/trigger/ssl_renew', methods=['POST'])
 def trigger_ssl():
-    IS_DEMO_MODE = config.get('demo_mode', False)
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
     try:
@@ -360,8 +387,7 @@ def trigger_ssl():
 
 @app.route('/api/trigger/ssl_create/<domain_name>', methods=['POST'])
 def trigger_create_cert(domain_name):
-    IS_DEMO_MODE = config.get('demo_mode', False)
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
     
@@ -429,8 +455,7 @@ def trigger_test_smtp():
 
 @app.route('/api/refresh_ip/<domain_name>', methods=['GET'])
 def trigger_refresh_ip(domain_name):
-    IS_DEMO_MODE = config.get('demo_mode', False)
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
     try:
@@ -446,8 +471,7 @@ def trigger_refresh_ip(domain_name):
 
 @app.route('/api/force_update_ip/<domain_name>', methods=['POST'])
 def trigger_force_update_ip(domain_name):
-    IS_DEMO_MODE = config.get('demo_mode', False)
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         flash("Actions are disabled in Demo Mode.", "info")
         return redirect(url_for('index'))
     try:

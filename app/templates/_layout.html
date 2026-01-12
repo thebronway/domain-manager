@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Domain Manager{% endblock %}</title>
+    <title>{% block title %}domainCtrl{% endblock %}</title>
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
     
@@ -62,8 +62,8 @@
     </svg>
 
     {% if demo_mode %}
-        <div class="demo-banner">
-            DEMO MODE ENABLED
+        <div class="demo-banner" style="background-color: #ffc107; color: #212529; text-align: center; padding: 10px; font-weight: bold; border-bottom: 2px solid #d39e00;">
+            🚧 DEMO MODE 🚧
         </div>
     {% endif %}
 
@@ -85,9 +85,9 @@
     <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
     
     <footer class="app-footer">
-        v0.4 | 
-        <a href="https://github.com/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">GitHub</a> | 
-        <a href="https://hub.docker.com/r/thebronway/domain-manager" target="_blank" rel="noopener noreferrer">Docker Hub</a>
+        v0.5 | 
+        <a href="https://github.com/thebronway/domainCtrl" target="_blank" rel="noopener noreferrer">GitHub</a> | 
+        <a href="https://hub.docker.com/r/thebronway/domainCtrl" target="_blank" rel="noopener noreferrer">Docker Hub</a>
     </footer>
     
 </body>

@@ -22,17 +22,18 @@ except Exception as e:
 # --- Timezone-Aware Logger ---
 class TimezoneFormatter(logging.Formatter):
     """Custom formatter to add timezone to log records."""
-    def __init__(self, fmt=None, datefmt=None, style='%', tz_name='UTC'):
+    def __init__(self, fmt=None, datefmt=None, style='%'):
         super().__init__(fmt, datefmt, style)
-        try:
-            self.tz = pytz.timezone(tz_name)
-        except pytz.UnknownTimeZoneError:
-            logger.warning(f"Unknown timezone '{tz_name}'. Defaulting to UTC.")
-            self.tz = pytz.timezone('UTC')
 
     def formatTime(self, record, datefmt=None):
-        """Converts log record time to the configured timezone."""
-        dt = datetime.fromtimestamp(record.created, self.tz)
+        """Converts log record time to the configured timezone dynamically."""
+        tz_name = config.get('timezone', 'UTC')
+        try:
+            tz = pytz.timezone(tz_name)
+        except pytz.UnknownTimeZoneError:
+            tz = pytz.timezone('UTC')
+            
+        dt = datetime.fromtimestamp(record.created, tz)
         if datefmt:
             return dt.strftime(datefmt)
         else:
@@ -41,13 +42,11 @@ class TimezoneFormatter(logging.Formatter):
 # --- Configure Logging ---
 LOG_FILE = "/logs/domain-manager.log"
 
-# Get timezone from config
-log_tz = config.get('timezone', 'UTC')
 log_format = '%(asctime)s - %(levelname)s - %(message)s'
 date_format = '%Y-%m-%d %H:%M:%S'
 
 # Create the custom formatter
-formatter = TimezoneFormatter(fmt=log_format, datefmt=date_format, tz_name=log_tz)
+formatter = TimezoneFormatter(fmt=log_format, datefmt=date_format)
 
 # Create file handler
 file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1048576, backupCount=5)

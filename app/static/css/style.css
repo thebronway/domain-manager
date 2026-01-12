@@ -600,8 +600,9 @@ body {
     }
     
     .top-bar-left {
-        justify-content: space-between; /* Puts title and reset button on opposite ends */
+        justify-content: center; /* Center the logo horizontally */
         align-items: center;
+        width: 100%; /* Ensure the container spans the full width so centering works */
     }
     .top-bar-left h1 {
         font-size: 1.1em;
@@ -1182,4 +1183,229 @@ input:checked + .slider:before {
 /* Force readable link color in Dark Mode */
 :root.dark-mode .styled-link {
     color: #66b0ff !important;
+}
+/* --- Multi-Select Dropdown (Settings) --- */
+.multi-select-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.multi-select-btn {
+    width: 100%;
+    padding: 8px;
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.9em;
+    color: var(--text-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.multi-select-btn::after {
+    content: '▼';
+    font-size: 0.7em;
+    color: var(--text-color-light);
+}
+
+.multi-select-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 200px; /* Wider than button to show text */
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: var(--page-bg-color);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    z-index: 100;
+    border-radius: 4px;
+    padding: 5px 0;
+}
+
+.multi-select-dropdown.show {
+    display: block;
+}
+
+.multi-select-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    gap: 10px;
+}
+
+.multi-select-item:hover {
+    background-color: var(--table-row-hover);
+}
+
+.multi-select-item input {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+.multi-select-item span {
+    font-size: 0.9em;
+    user-select: none;
+}
+
+/* Provider Status Box */
+.provider-status-box {
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+.provider-status-box.ok {
+    background-color: rgba(40, 167, 69, 0.1);
+    border-color: #28a745;
+    color: #155724;
+}
+.provider-status-box.error {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-color: #dc3545;
+    color: #721c24;
+}
+
+/* --- Multi-Select Actions (Check All/None) --- */
+.multi-select-actions {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 5px;
+    font-size: 0.85em;
+    background-color: var(--table-header-bg);
+}
+
+.btn-link-sm {
+    background: none;
+    border: none;
+    color: var(--link-color);
+    cursor: pointer;
+    padding: 0;
+    font-size: inherit;
+    font-weight: 600;
+}
+.btn-link-sm:hover {
+    text-decoration: underline;
+    color: var(--link-hover-color);
+}
+
+/* Ensure button text truncates with ellipsis (...) */
+.multi-select-btn {
+    display: flex; /* Ensure flex layout for arrow alignment */
+    justify-content: space-between;
+    align-items: center;
+    overflow: hidden; /* Contain text */
+}
+
+.multi-select-btn span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    margin-right: 10px; /* Space for the arrow */
+    flex-grow: 1;
+}
+
+/* --- CSS Tooltips --- */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    margin-left: 5px;
+    color: var(--text-color-light);
+    font-size: 0.85em;
+    font-weight: normal;
+    border-bottom: 1px dotted var(--text-color-light);
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    width: 220px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 1000;
+    bottom: 125%; /* Position above */
+    left: 50%;
+    margin-left: -110px; /* Center it */
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 0.8em;
+    font-weight: normal;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    line-height: 1.4;
+    pointer-events: none; /* Prevent flickering */
+}
+
+.tooltip .tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #333 transparent transparent transparent;
+}
+
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Adjust tooltip for first/last columns to prevent cutoff */
+th:first-child .tooltip .tooltip-text {
+    left: 0;
+    margin-left: 0;
+}
+th:first-child .tooltip .tooltip-text::after {
+    left: 10%;
+}
+th:last-child .tooltip .tooltip-text {
+    left: auto;
+    right: 0;
+    margin-left: 0;
+}
+th:last-child .tooltip .tooltip-text::after {
+    left: auto;
+    right: 10%;
+}
+/* --- Brand Logo & Theme Switching --- */
+.brand-logo-container {
+    display: flex;
+    align-items: center;
+    padding: 5px 0;
+}
+
+.brand-logo {
+    height: 40px; /* Adjust height as needed depending on navbar size */
+    width: auto;
+    transition: opacity 0.3s ease;
+}
+
+/* Default: Hide dark mode logo, show light mode logo */
+.dark-mode-logo {
+    display: none;
+}
+.light-mode-logo {
+    display: block;
+}
+
+/* When Dark Mode is active: Hide light logo, show dark logo */
+html.dark-mode .light-mode-logo {
+    display: none;
+}
+html.dark-mode .dark-mode-logo {
+    display: block;
 }

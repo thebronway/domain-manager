@@ -214,24 +214,31 @@ class Route53Service:
     """Handles all interactions with AWS Route 53."""
     
     def __init__(self):
-        # We load AWS keys once. 
-        # If these change, the container usually needs a restart anyway 
-        # as they are typically ENV vars.
         aws_config = config.get('aws', {})
+        
+        # 1. Check if keys exist in the config (mapped from ENV in config.py)
+        access_key = aws_config.get('access_key_id')
+        secret_key = aws_config.get('secret_access_key')
+
+        if not access_key or not secret_key:
+             raise Exception("Missing Credentials. For Route53, please provide AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (or USERNAME/PASSWORD) env vars.")
+
         try:
             self.client = boto3.client(
                 'route53',
-                aws_access_key_id=aws_config.get('access_key_id'),
-                aws_secret_access_key=aws_config.get('secret_access_key')
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key
             )
-            # Simple connectivity check
+            # 2. Connectivity Check
             self.client.list_hosted_zones(MaxItems='1')
-            logger.info("Route 53 client initialized successfully.")
+            logger.info("Route 53 client initialized and verified successfully.")
+            
         except NoCredentialsError:
-            # Critical error, but we don't want to crash the whole app, just log it.
-            logger.error("FATAL: AWS credentials not found.")
+            raise Exception("AWS Credentials Invalid or Not Found.")
         except ClientError as e:
-            logger.error(f"FATAL: Error connecting to Route 53: {e}")
+            raise Exception(f"AWS Connection Error: {e}")
+        except Exception as e:
+            raise Exception(f"Route53 Init Error: {e}")
 
     def _find_hosted_zone_id(self, domain_name):
         try:
@@ -333,12 +340,20 @@ class CertificateMonitor:
 
     def get_cert_expiration_date(self, domain_key):
         live_dir = f"/certs/{domain_key}/live/"
+        
+        # DEBUG: Check if main dir exists
         if not os.path.isdir(live_dir):
+            logger.warning(f"[{domain_key}] SSL Monitor: Directory not found at {live_dir}")
             return None
         
         cert_path = None
         try:
+            # Look for subdirectories (Certbot creates symlink folders inside live)
             subdirs = [d for d in os.listdir(live_dir) if os.path.isdir(os.path.join(live_dir, d))]
+            
+            if not subdirs:
+                logger.warning(f"[{domain_key}] SSL Monitor: No subdirectories found in {live_dir}")
+                
             for subdir in subdirs:
                 potential_path = os.path.join(live_dir, subdir, "fullchain.pem")
                 if os.path.exists(potential_path):
@@ -346,10 +361,13 @@ class CertificateMonitor:
                     break
             
             if not cert_path:
+                logger.warning(f"[{domain_key}] SSL Monitor: fullchain.pem not found in any subdir of {live_dir}")
                 return None
 
+            # Attempt to read the file
             with open(cert_path, 'rb') as f:
                 cert_data = f.read()
+            
             cert = cryptography.x509.load_pem_x509_certificate(cert_data, default_backend())
             
             # Convert to User Timezone
@@ -357,5 +375,5 @@ class CertificateMonitor:
             return cert.not_valid_after_utc.astimezone(tz)
             
         except Exception as e:
-            logger.error(f"Error reading certificate file: {e}")
+            logger.error(f"[{domain_key}] SSL Monitor Error reading {cert_path}: {e}")
             return None

@@ -28,28 +28,62 @@ state_lock = threading.Lock()
 app_state = {
     "public_ip": None,
     "last_ip_check_time": None,
-    "domain_states": {}
+    "domain_states": {},
+    "provider_error": None 
 }
 
-# --- DEMO MODE Service Initialization ---
+# --- Service Initialization ---
 
-IS_DEMO_MODE = config.get('demo_mode', False)
+ip_service = None
+r53_service = None
+cert_service = None
+cert_monitor = None
+provider_error = None  # Global error state for Dashboard UI
 
-if IS_DEMO_MODE:
-    # In Demo Mode, all external services are "None"
-    # This prevents any real AWS/IP/Certbot calls from being made.
-    logger.info("Demo Mode: Skipping initialization of external services.")
-    ip_service = None
-    r53_service = None
-    cert_service = None
-    cert_monitor = None
-else:
-    # In Real Mode, initialize all services as normal.
-    logger.info("Initializing external services for real mode.")
-    ip_service = PublicIPService()
-    r53_service = Route53Service()
-    cert_service = CertbotService()
-    cert_monitor = CertificateMonitor()
+def initialize_services():
+    global ip_service, r53_service, cert_service, cert_monitor, provider_error
+    
+    # Reset error state
+    provider_error = None
+
+    # 1. Demo Mode
+    if config.demo_mode:
+        logger.info("Initializing services in DEMO MODE.")
+        return
+
+    # 2. Validate Provider
+    provider = config.provider
+    if not provider:
+        provider_error = "Missing PROVIDER environment variable. Please set PROVIDER (e.g., 'Route53')."
+        logger.error(provider_error)
+        return
+
+    # 3. Initialize Specific Provider
+    try:
+        if provider == 'route53':
+            logger.info("Initializing Route53 Service...")
+            # We create a temporary instance to test credentials immediately
+            r53_service = Route53Service()
+            
+        else:
+            provider_error = f"Unsupported or unknown PROVIDER: '{provider}'"
+            logger.error(provider_error)
+            return
+
+        # 4. Initialize Common Services (Only if provider init succeeded)
+        ip_service = PublicIPService()
+        cert_service = CertbotService()
+        cert_monitor = CertificateMonitor()
+
+    except Exception as e:
+        # Catch specific credential errors passed up from the Service class
+        provider_error = f"Provider Initialization Failed: {str(e)}"
+        logger.error(provider_error)
+        # Prevent broken services from running
+        r53_service = None
+
+# Run initialization immediately on import
+initialize_services()
 
 # NotificationService is initialized in both modes
 # so the "Send Test Notification" button can work.
@@ -62,7 +96,7 @@ def load_state():
     global app_state
     
     # --- Skip loading state in demo mode ---
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         logger.info("Demo Mode: Skipping state load.")
         return
     
@@ -87,7 +121,16 @@ def load_state():
                 if state.get("ssl_last_renew"):
                     state["ssl_last_renew"] = datetime.fromisoformat(state["ssl_last_renew"])
             
+            # --- CHANGE START: Preserve provider_error ---
+            # We don't want to overwrite the current runtime error (if any) with old data from disk
+            current_error = provider_error
+
             app_state.update(loaded_state)
+            
+            # Re-apply the current runtime error status
+            app_state['provider_error'] = current_error
+            # --- CHANGE END ---
+
             logger.info("Successfully loaded previous state from disk.")
                 
         except Exception as e:
@@ -95,7 +138,8 @@ def load_state():
             app_state.update({
                 "public_ip": None,
                 "last_ip_check_time": None,
-                "domain_states": {}
+                "domain_states": {},
+                "provider_error": None
             })
 
 def save_state():
@@ -103,7 +147,7 @@ def save_state():
     global app_state
     
     # --- Skip saving state in demo mode ---
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         return
     
     with state_lock:
@@ -408,7 +452,7 @@ def run_initial_setup():
         load_state()
         
         # --- Skip in demo mode ---
-        if IS_DEMO_MODE:
+        if config.demo_mode:
             logger.info("Demo Mode: Skipping initial setup.")
             return
         
@@ -435,73 +479,110 @@ def run_initial_setup():
 
 # --- Scheduler Thread ---
 
-def run_scheduler():
-    """Runs the main scheduler loop in a separate thread."""
-    
-    if IS_DEMO_MODE:
-        logger.info("Demo Mode: Scheduler is disabled.")
-        return 
-    
-    # --- Schedule jobs ---
+from app.config import SETTINGS_FILE
+
+def register_jobs(run_first_check=False):
+    """Clears and re-registers all jobs based on current config."""
+    schedule.clear()
     
     # 1. SSL Check
-    ssl_utc_time = get_utc_time_for_local_string("02:30")
-    schedule.every().day.at(ssl_utc_time).do(run_ssl_check)
+    cert_cfg = config.get('cert_management', {'enabled': True, 'check_time': '02:30'})
     
-    # --- DEBUG LOG: Print exactly when we think we are running ---
-    tz = get_user_timezone()
-    logger.info(f"Scheduler: SSL Check scheduled for {ssl_utc_time} UTC. (Target was 02:30 {tz})")
+    if cert_cfg.get('enabled', True):
+        check_time_str = cert_cfg.get('check_time', '02:30')
+        ssl_utc_time = get_utc_time_for_local_string(check_time_str)
+        schedule.every().day.at(ssl_utc_time).do(run_ssl_check)
+        
+        tz = get_user_timezone()
+        logger.info(f"Scheduler: SSL Check scheduled for {ssl_utc_time} UTC. (Target {check_time_str} {tz})")
+    else:
+        logger.info("Scheduler: SSL Check is GLOBALLY DISABLED.")
     
     # 2. Log Cleanup
     log_utc_time = get_utc_time_for_local_string("03:30")
     schedule.every().day.at(log_utc_time).do(run_log_cleanup)
     
+    # 3. IP Check
     interval_str = config.get('ip_check_interval', '5m')
     log_msg = ""
-    run_first_check = True
+    should_run_now = True
     
     if interval_str == '5m':
         for minute in range(0, 60, 5):
             schedule.every().hour.at(f":{minute:02d}").do(run_ddns_update)
-        log_msg = "every 5 minutes (at :00, :05...)"
+        log_msg = "every 5 minutes"
     elif interval_str == '10m':
         for minute in range(0, 60, 10):
             schedule.every().hour.at(f":{minute:02d}").do(run_ddns_update)
-        log_msg = "every 10 minutes (at :00, :10...)"
+        log_msg = "every 10 minutes"
     elif interval_str == '60m':
         schedule.every().hour.at(":00").do(run_ddns_update)
-        log_msg = "every hour (at :00)"
+        log_msg = "every hour"
     elif interval_str == '24h':
         ip_utc_time = get_utc_time_for_local_string("00:00")
         schedule.every().day.at(ip_utc_time).do(run_ddns_update)
-        log_msg = f"daily at 00:00 local (schedules for {ip_utc_time} UTC)"
+        log_msg = f"daily at 00:00 local"
     elif interval_str == 'disabled':
         log_msg = "disabled"
-        run_first_check = False
+        should_run_now = False
     else:
-        logger.warning(f"Invalid 'ip_check_interval' value: '{interval_str}'. Defaulting to 5 minutes.")
         for minute in range(0, 60, 5):
             schedule.every().hour.at(f":{minute:02d}").do(run_ddns_update)
-        log_msg = "every 5 minutes (defaulted)"
+        log_msg = "every 5 minutes (default)"
 
-    logger.info(f"Scheduler jobs registered. DDNS check: {log_msg}. SSL check at 02:30 local ({ssl_utc_time} UTC).")
+    logger.info(f"Jobs Registered. DDNS: {log_msg}.")
     
-    # Now run the slow initial setup
-    run_initial_setup()
-    
-    if run_first_check:
+    if run_first_check and should_run_now:
         logger.info("Running initial DDNS check...")
-        run_ddns_update() 
+        run_ddns_update()
+
+def reload_scheduler():
+    """Public method to reload settings and jobs immediately."""
+    config.load()
+    register_jobs(run_first_check=False)
+
+def run_scheduler():
+    """Runs the main scheduler loop in a separate thread."""
     
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    if config.demo_mode:
+        logger.info("Demo Mode: Scheduler is disabled.")
+        return 
+
+    try:
+        # Initial registration
+        register_jobs(run_first_check=True)
+        run_initial_setup()
+        
+        last_mtime = 0
+        if os.path.exists(SETTINGS_FILE):
+            last_mtime = os.path.getmtime(SETTINGS_FILE)
+
+        while True:
+            try:
+                schedule.run_pending()
+                
+                # Check for config changes on disk
+                if os.path.exists(SETTINGS_FILE):
+                    current_mtime = os.path.getmtime(SETTINGS_FILE)
+                    if current_mtime > last_mtime:
+                        logger.info("Settings change detected. Reloading scheduler config...")
+                        last_mtime = current_mtime
+                        reload_scheduler()
+                        
+            except Exception as loop_e:
+                # Catch errors inside the loop so the thread doesn't die
+                logger.error(f"CRITICAL: Scheduler loop crashed: {loop_e}")
+                
+            time.sleep(1)
+
+    except Exception as e:
+        logger.critical(f"FATAL: Scheduler thread crashed during startup: {e}")
 
 def start_scheduler():
     """Starts the scheduler in a non-blocking daemon thread."""
     
     # --- Skip in demo mode ---
-    if IS_DEMO_MODE:
+    if config.demo_mode:
         logger.info("Demo Mode: Skipping scheduler thread start.")
         return # Do not start the thread
 
